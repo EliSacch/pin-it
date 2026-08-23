@@ -16,6 +16,7 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     notes = db.relationship("Note", back_populates="owner", cascade="all, delete-orphan")
     dashboards = db.relationship("Dashboard", back_populates="owner", cascade="all, delete-orphan")
+    invites = db.relationship("Invite", back_populates="user", cascade="all, delete-orphan")
     created_at = db.Column(UTCDateTime, default=utc_now)
     updated_at = db.Column(
         UTCDateTime,
