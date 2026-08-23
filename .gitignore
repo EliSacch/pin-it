@@ -2,3 +2,5 @@
 .env
 __pycache__/
 .cursorignore
+node_modules/
+static/scripts/app.bundle.js.map

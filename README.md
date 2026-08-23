@@ -28,6 +28,7 @@ A web app for your notes
   - [Database migrations](#database-migrations)
   - [Environment variables](#environment-variables)
   - [Formatting templates](#formatting-templates)
+  - [JavaScript bundle](#javascript-bundle)
 
 - [Technologies used](#technologies-used)
   - [Languages](#languages)
@@ -196,6 +197,35 @@ The `-` source is required when `files` is set in the config; djLint then uses `
 
 In Cursor/VS Code, install the djLint extension and set it as the default formatter for Jinja/HTML files if you want format-on-save.
 
+### JavaScript bundle
+
+`app.js` is the esbuild entry and imports:
+
+- `ui-common.js` — shared helpers (button loading, form errors, skip link)
+- `page-transitions.js` — same-origin navigation transitions
+- `disclosures.js` — options and dashboards menus
+- `modals.js` — dialog open/close and AJAX submit
+- `note-editor.js` — Editor.js note body and checklist toggles
+- `notes-ui.js` — add / edit / cancel note forms
+- `profile-inline.js` — profile inline field editor
+
+For any change, edit the source files, then rebuild.
+
+First time (and after `package.json` changes):
+
+```bash
+npm install
+npm run build
+```
+
+While iterating, rebuild on save:
+
+```bash
+npm run watch
+```
+
+`node_modules/` is gitignored. The generated bundle is committed so `python run.py` works without Node. Commit an updated `app.bundle.js` with any JavaScript source change.
+
 [Back to the top](#PinIt)
 
 ## Technologies used
@@ -224,6 +254,7 @@ In Cursor/VS Code, install the djLint extension and set it as the default format
 - [Jinja2](https://jinja.palletsprojects.com/) — server-rendered templates
 - [Editor.js](https://editorjs.io/) — block-style note content editing (paragraphs and checklists)
 - [jQuery](https://jquery.com/) — client-side interactions (modals, forms, options menu)
+- [esbuild](https://esbuild.github.io/) — bundles custom JS into `app.bundle.js`
 - [Font Awesome](https://fontawesome.com/) — icons
 - [Google Fonts](https://fonts.google.com/) — Mulish and Shadows Into Light
 
@@ -235,6 +266,7 @@ In Cursor/VS Code, install the djLint extension and set it as the default format
 - Virtualenv — local Python environment
 - `requirements.txt` — runtime packages for running and deploying the app
 - `requirements-dev.txt` — runtime packages plus local development tools
+- `package.json` — esbuild for the client JS bundle (`npm run build` / `npm run watch`)
 
 ### Hosting
 

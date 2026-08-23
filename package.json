@@ -1,0 +1,11 @@
+{
+  "name": "pinit",
+  "private": true,
+  "scripts": {
+    "build": "esbuild static/scripts/app.js --bundle --outfile=static/scripts/app.bundle.js --format=iife",
+    "watch": "esbuild static/scripts/app.js --bundle --outfile=static/scripts/app.bundle.js --format=iife --sourcemap --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  }
+}

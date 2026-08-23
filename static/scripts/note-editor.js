@@ -1,11 +1,8 @@
 /**
  * Note text editing (Editor.js) — keep all editor/todo logic here.
- * Exposes window.NoteEditor for scripts.js open/close coordination.
  */
-(function (window, $) {
-    'use strict';
-
-    const editorsByHolderId = new Map();
+const $ = window.jQuery;
+const editorsByHolderId = new Map();
 
     function getListTool() {
         return window.EditorjsList || window.List;
@@ -601,10 +598,9 @@
         });
     });
 
-    window.NoteEditor = {
-        init: initNoteEditor,
-        destroy: destroyNoteEditor,
-        destroyAll: destroyAllNoteEditors,
-        clearErrors: clearNoteFormErrors,
-    };
-})(window, window.jQuery);
+export const NoteEditor = {
+    init: initNoteEditor,
+    destroy: destroyNoteEditor,
+    destroyAll: destroyAllNoteEditors,
+    clearErrors: clearNoteFormErrors,
+};
