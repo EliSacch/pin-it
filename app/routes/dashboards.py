@@ -6,6 +6,12 @@ from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
+from app.helpers.invites import (
+    collect_invite_email_errors,
+    create_invites,
+    normalized_invite_emails,
+    submitted_invite_emails,
+)
 from app.models import Dashboard, Note
 
 dashboards_bp = Blueprint("dashboards", __name__, url_prefix="/dashboards")
@@ -56,9 +62,24 @@ def _redirect_with_form_errors(form_key, errors, values=None, redirect_url=None)
 
 
 def _submitted_dashboard_values():
+    """
+    Returns the values submitted for a dashboard creation or update form.
+    Used to return errors and values to the form after a submission error.
+    """
     return {
         "name": request.form.get("name", ""),
+        "invite_emails": submitted_invite_emails(request.form),
     }
+
+
+def _apply_invite_email_errors(errors, values):
+    invite_errors = collect_invite_email_errors(
+        values.get("invite_emails"),
+        owner_email=current_user.email,
+    )
+    if invite_errors:
+        errors.setdefault("invite_emails", []).extend(invite_errors)
+    return normalized_invite_emails(values.get("invite_emails"))
 
 
 def _create_error_response(
@@ -160,8 +181,8 @@ def list():
 def create():
     if request.method == "POST":
         errors = {}
-        name = (request.form.get("name") or "").strip()
         values = _submitted_dashboard_values()
+        name = values.get("name", "").strip()
 
         if not _has_valid_dashboards_csrf_token():
             errors.setdefault("form", []).append("Invalid form submission.")
@@ -169,6 +190,7 @@ def create():
             errors.setdefault("name", []).append("Name is required.")
         elif len(name) > 50:
             errors.setdefault("name", []).append("Name must be less than 50 characters.")
+        invite_emails = _apply_invite_email_errors(errors, values)
         if errors:
             return _create_error_response(errors, values)
 
@@ -178,6 +200,7 @@ def create():
             is_default=False,
         )
         db.session.add(new_dashboard)
+        create_invites(new_dashboard, invite_emails)
         try:
             db.session.commit()
             session.pop("dashboards_csrf_token", None)
@@ -216,8 +239,8 @@ def update(dashboard_id):
         return redirect(_dashboard_url(dashboard))
 
     errors = {}
-    name = (request.form.get("name") or "").strip()
     values = _submitted_dashboard_values()
+    name = values.get("name", "").strip()
     error_redirect = _dashboard_url(dashboard)
 
     if dashboard.is_default:
@@ -234,6 +257,7 @@ def update(dashboard_id):
         errors.setdefault("name", []).append("Name is required.")
     elif len(name) > 50:
         errors.setdefault("name", []).append("Name must be less than 50 characters.")
+    invite_emails = _apply_invite_email_errors(errors, values)
     if errors:
         return _create_error_response(
             errors,
@@ -243,6 +267,7 @@ def update(dashboard_id):
         )
 
     dashboard.name = name
+    create_invites(dashboard, invite_emails)
     try:
         db.session.commit()
         session.pop("dashboards_csrf_token", None)

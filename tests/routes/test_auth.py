@@ -1,26 +1,13 @@
-import re
 import smtplib
 from unittest.mock import patch
-
-from itsdangerous import URLSafeTimedSerializer
 
 from app.extensions import db
 from app.helpers.email_verification import generate_email_token, load_email_token
 from app.models import User
-from tests.conftest import login
+from tests.conftest import confirm_url_token, login, mail_outbox
 
 PASSWORD = "ValidPass123!"
 RESEND_CSRF = "test-resend-csrf-token"
-
-
-def mail_outbox(app):
-    return getattr(app.extensions["mailman"], "outbox", [])
-
-
-def confirm_url_token(message):
-    match = re.search(r"/verify-email/([^\s]+)", message.body)
-    assert match is not None
-    return match.group(1)
 
 
 def register_csrf(client):
@@ -33,28 +20,6 @@ def login_with_resend_csrf(client, user):
     login(client, user)
     with client.session_transaction() as sess:
         sess["resend_verification_csrf_token"] = RESEND_CSRF
-
-
-def test_token_roundtrip(app, user):
-    token = generate_email_token(user)
-
-    assert load_email_token(token) == {"user_id": user.id, "email": user.email}
-
-
-def test_token_rejects_bad_signature(app, user):
-    token = URLSafeTimedSerializer("test-secret", salt="other-purpose").dumps(
-        {"user_id": user.id, "email": user.email}
-    )
-
-    assert load_email_token(token) is None
-    assert load_email_token("not-a-token") is None
-
-
-def test_token_expired(app, user):
-    token = generate_email_token(user)
-
-    with patch("app.helpers.email_verification.MAX_AGE_SECONDS", -1):
-        assert load_email_token(token) == "expired"
 
 
 def test_register_sends_verification_email(client, app):

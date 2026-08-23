@@ -40,7 +40,7 @@ def create_app(config_overrides=None):
 
     from app import models  # noqa: F401
     from app.helpers.alerts import alert_icon
-    from app.routes import auth_bp, dashboards_bp, main_bp, notes_bp, profile_bp
+    from app.routes import auth_bp, dashboards_bp, main_bp, notes_bp, profile_bp, invites_bp
 
     app.jinja_env.globals["alert_icon"] = alert_icon
 
@@ -49,7 +49,8 @@ def create_app(config_overrides=None):
     app.register_blueprint(profile_bp)
     app.register_blueprint(dashboards_bp)
     app.register_blueprint(notes_bp)
-
+    app.register_blueprint(invites_bp)
+    
     @app.errorhandler(RateLimitExceeded)
     def handle_rate_limit_exceeded(error):
         flash("Too many attempts. Please wait a moment and try again.", "warning")

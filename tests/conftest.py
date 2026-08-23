@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from sqlalchemy.pool import StaticPool
 from werkzeug.security import generate_password_hash
@@ -83,3 +85,13 @@ def login(client, user, csrf_token=CSRF_TOKEN):
         session["_user_id"] = str(user.id)
         session["_fresh"] = True
         session["dashboards_csrf_token"] = csrf_token
+
+
+def mail_outbox(app):
+    return getattr(app.extensions["mailman"], "outbox", [])
+
+
+def confirm_url_token(message):
+    match = re.search(r"/verify-email/([^\s]+)", message.body)
+    assert match is not None
+    return match.group(1)
