@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Invitation unavailable{% endblock %}
+{% block content %}
+    <main id="main-content">
+        <section class="form-wrapper invitation" aria-labelledby="invitation-title">
+            <h1 id="invitation-title">Invitation unavailable</h1>
+            <p class="invitation-details">{{ message }}</p>
+            {% if current_user.is_authenticated %}
+                <div class="invitation-actions">
+                    <a href="{{ url_for('main.index') }}" class="base-button link">Go to your dashboards</a>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+{% endblock %}

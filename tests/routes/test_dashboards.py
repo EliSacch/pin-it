@@ -46,8 +46,19 @@ def test_collaborator_can_view_shared_dashboard_and_sees_it_in_nav(
     html = response.get_data(as_text=True)
     assert response.status_code == 200
     assert f'href="/dashboards/{dashboard.id}/{dashboard.slug}"' in html
-    assert "(shared by elisa)" in html
+    assert 'class="dashboard-nav-owner"' in html
+    assert '<span class="visually-hidden">shared </span>by elisa' in html
     assert 'aria-label="Dashboard settings"' not in html
+
+
+def test_owner_nav_has_no_owner_line(client, user, other_user, dashboard):
+    add_collaborator(dashboard, other_user)
+    login(client, user)
+
+    html = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}").get_data(as_text=True)
+
+    assert 'class="dashboard-nav-name">Work</span>' in html
+    assert 'class="dashboard-nav-owner"' not in html
 
 
 def test_pending_invitee_cannot_view_dashboard(client, other_user, dashboard):

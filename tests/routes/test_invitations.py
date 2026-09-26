@@ -295,8 +295,7 @@ def test_expired_token_still_works_on_post(client, other_user, dashboard):
         client.post(f"{invitation_path(token)}/accept", data={"csrf_token": CSRF_TOKEN})
 
     db.session.refresh(invite)
-    assert get_response.status_code == 302
-    assert get_response.headers["Location"] == "/"
+    assert get_response.status_code == 410
     assert invite.status == "accepted"
 
 
@@ -314,16 +313,41 @@ def test_reopening_accepted_invite_redirects_to_dashboard(client, other_user, da
     assert response.headers["Location"].endswith(dashboard_path(dashboard))
 
 
-def test_expired_invitation_redirects_with_warning(client, other_user, dashboard):
+def test_expired_invitation_shows_page_for_logged_in_user(client, other_user, dashboard):
     token = generate_invite_token(make_invite(dashboard))
     login(client, other_user)
 
     with patch("app.helpers.invite_tokens.MAX_AGE_SECONDS", -1):
         response = client.get(invitation_path(token))
 
-    assert response.status_code == 302
-    assert response.headers["Location"] == "/"
-    assert any("expired" in message for _, message in flashes(client))
+    html = response.get_data(as_text=True)
+    assert response.status_code == 410
+    assert "This invitation link has expired." in html
+    assert "Go to your dashboards" in html
+
+
+def test_expired_invitation_shows_message_before_login(client, dashboard):
+    token = generate_invite_token(make_invite(dashboard))
+
+    with patch("app.helpers.invite_tokens.MAX_AGE_SECONDS", -1):
+        response = client.get(invitation_path(token))
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 410
+    assert "This invitation link has expired." in html
+    assert "/login" not in html
+    assert "/register" not in html
+
+
+def test_tampered_invitation_shows_message_before_login(client, dashboard):
+    token = generate_invite_token(make_invite(dashboard))
+
+    response = client.get(invitation_path(token + "x"))
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 404
+    assert "This invitation link is invalid." in html
+    assert "/login" not in html
 
 
 def test_tampered_invitation_is_invalid(client, other_user, dashboard):
@@ -332,8 +356,8 @@ def test_tampered_invitation_is_invalid(client, other_user, dashboard):
 
     response = client.get(invitation_path(token + "x"))
 
-    assert response.status_code == 302
-    assert ("warning", "This invitation link is invalid.") in flashes(client)
+    assert response.status_code == 404
+    assert "This invitation link is invalid." in response.get_data(as_text=True)
 
 
 def test_deleted_invitation_is_invalid(client, other_user, dashboard):
@@ -345,8 +369,8 @@ def test_deleted_invitation_is_invalid(client, other_user, dashboard):
 
     response = client.get(invitation_path(token))
 
-    assert response.status_code == 302
-    assert ("warning", "This invitation link is invalid.") in flashes(client)
+    assert response.status_code == 404
+    assert "This invitation link is invalid." in response.get_data(as_text=True)
 
 
 def test_invitation_for_different_email_is_rejected(client, user, dashboard):

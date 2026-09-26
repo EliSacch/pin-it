@@ -5,8 +5,14 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.extensions import db
-from app.helpers.invites import accept_invite, decline_invite, load_invite_for_user
+from app.extensions import db, login_manager
+from app.helpers.invites import (
+    EXPIRED_INVITE_MESSAGE,
+    accept_invite,
+    decline_invite,
+    load_invite,
+    load_invite_for_user,
+)
 
 invitations_bp = Blueprint("invitations", __name__, url_prefix="/invitations")
 
@@ -45,8 +51,14 @@ def _already_answered_redirect(invite):
 
 
 @invitations_bp.route("/<token>")
-@login_required
 def show(token):
+    _, error = load_invite(token)
+    if error:
+        status = 410 if error == EXPIRED_INVITE_MESSAGE else 404
+        return render_template("invites/unavailable.html", message=error), status
+    if not current_user.is_authenticated:
+        return login_manager.unauthorized()
+
     invite, error = load_invite_for_user(token, current_user)
     if error:
         return _redirect_home(error)

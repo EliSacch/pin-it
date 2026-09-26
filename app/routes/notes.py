@@ -206,7 +206,7 @@ def create(dashboard_id):
 @notes_bp.route("/<int:note_id>/update", methods=["GET", "POST"])
 @login_required
 def update(dashboard_id, note_id):
-    dashboard = _get_owned_dashboard(dashboard_id)
+    dashboard = get_member_dashboard_or_404(dashboard_id)
     note = db.session.get(Note, note_id)
     if not _can_manage(note, dashboard):
         flash("You are not authorized to edit this note.", "error")

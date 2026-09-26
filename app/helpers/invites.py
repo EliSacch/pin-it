@@ -6,6 +6,7 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.helpers.email import collect_email_errors
+from app.helpers import invite_tokens
 from app.helpers.invite_tokens import STRICT, generate_invite_token, load_invite_token
 from app.models import Invite, User
 
@@ -104,7 +105,7 @@ MISMATCHED_INVITE_MESSAGE = (
 )
 
 
-def load_invite_for_user(token, user, max_age=STRICT):
+def load_invite(token, max_age=STRICT):
     """Returns (invite, None) on success or (None, error_message)."""
     data = load_invite_token(token, max_age=max_age)
     if data == "expired":
@@ -115,6 +116,14 @@ def load_invite_for_user(token, user, max_age=STRICT):
     invite = db.session.get(Invite, data.get("invite_id"))
     if invite is None or invite.deleted_at is not None or invite.email != data.get("email"):
         return None, INVALID_INVITE_MESSAGE
+    return invite, None
+
+
+def load_invite_for_user(token, user, max_age=STRICT):
+    """Returns (invite, None) on success or (None, error_message)."""
+    invite, error = load_invite(token, max_age=max_age)
+    if error:
+        return None, error
     if invite.email.lower() != (user.email or "").lower():
         return None, MISMATCHED_INVITE_MESSAGE
     return invite, None
@@ -138,7 +147,8 @@ def send_invite_email(invite):
         body=(
             f"Hi,\n\nYou were invited to collaborate on the "
             f"\"{invite.dashboard.name}\" dashboard.\n\n"
-            f"Open your invitation (this link expires in 10 minutes):\n{invite_url}\n"
+            f"Open your invitation (this link expires in "
+            f"{invite_tokens.MAX_AGE_SECONDS // 60} minutes):\n{invite_url}\n"
         ),
         to=[invite.email],
     )
