@@ -28,19 +28,15 @@ def normalized_invite_emails(raw_emails):
     return emails
 
 
-def existing_invite_emails(dashboard):
+def _dashboard_invites(dashboard, *, revoked):
     if dashboard is None or dashboard.id is None:
-        return set()
-    return {
-        email.lower()
-        for email in db.session.scalars(
-            db.select(Invite.email).where(
-                Invite.dashboard_id == dashboard.id,
-                Invite.deleted_at.is_(None),
-            )
-        )
-        if email
-    }
+        return []
+    deleted_filter = (
+        Invite.deleted_at.is_not(None) if revoked else Invite.deleted_at.is_(None)
+    )
+    return db.session.scalars(
+        db.select(Invite).where(Invite.dashboard_id == dashboard.id, deleted_filter)
+    ).all()
 
 
 def collect_invite_email_errors(raw_emails, *, owner_email):
@@ -71,37 +67,45 @@ def collect_invite_email_errors(raw_emails, *, owner_email):
 
 
 def create_invites(dashboard, emails):
+    live = _dashboard_invites(dashboard, revoked=False)
+    live_emails = {invite.email.lower() for invite in live}
+    live_user_ids = {invite.user_id for invite in live if invite.user_id}
+
+    candidates = [email for email in emails if email not in live_emails]
+    if not candidates:
+        return []
+
+    users = db.session.scalars(
+        db.select(User).where(func.lower(User.email).in_(candidates))
+    ).all()
+    user_by_email = {user.email.lower(): user for user in users}
     emails_to_create = [
-        email for email in emails if email not in existing_invite_emails(dashboard)
+        email
+        for email in candidates
+        if not (email in user_by_email and user_by_email[email].id in live_user_ids)
     ]
     if not emails_to_create:
         return []
 
-    users = db.session.scalars(
-        db.select(User).where(func.lower(User.email).in_(emails_to_create))
-    ).all()
-    user_by_email = {user.email.lower(): user for user in users}
-
     revoked_by_email = {}
-    if dashboard.id is not None:
-        revoked_by_email = {
-            invite.email.lower(): invite
-            for invite in db.session.scalars(
-                db.select(Invite).where(
-                    Invite.dashboard_id == dashboard.id,
-                    Invite.deleted_at.is_not(None),
-                    func.lower(Invite.email).in_(emails_to_create),
-                )
-            )
-        }
+    revoked_by_user_id = {}
+    for invite in _dashboard_invites(dashboard, revoked=True):
+        revoked_by_email[invite.email.lower()] = invite
+        if invite.user_id:
+            revoked_by_user_id.setdefault(invite.user_id, invite)
 
     invites = []
     for email in emails_to_create:
         user = user_by_email.get(email)
         revoked = revoked_by_email.get(email)
+        if revoked is None and user is not None:
+            revoked = revoked_by_user_id.get(user.id)
+            if revoked is not None and revoked.email.lower() in emails_to_create:
+                revoked = None
         if revoked is not None:
             revoked.deleted_at = None
             revoked.status = "pending"
+            revoked.email = email
             revoked.user_id = user.id if user else None
             invites.append(revoked)
             continue
@@ -150,12 +154,32 @@ def load_invite_for_user(token, user, max_age=STRICT):
     return invite, None
 
 
+def _other_live_invite(invite, user):
+    return db.session.scalar(
+        db.select(Invite).where(
+            Invite.dashboard_id == invite.dashboard_id,
+            Invite.user_id == user.id,
+            Invite.deleted_at.is_(None),
+            Invite.id != invite.id,
+        )
+    )
+
+
 def accept_invite(invite, user):
+    other = _other_live_invite(invite, user)
+    if other is not None:
+        other.deleted_at = utc_now()
     invite.status = "accepted"
     invite.user_id = user.id
 
 
 def decline_invite(invite, user):
+    other = _other_live_invite(invite, user)
+    if other is not None and other.status == "accepted":
+        invite.deleted_at = utc_now()
+        return
+    if other is not None:
+        other.deleted_at = utc_now()
     invite.status = "rejected"
     invite.user_id = user.id
 
@@ -181,7 +205,7 @@ def send_invite_email(invite):
             f"Hi,\n\nYou were invited to collaborate on the "
             f"\"{invite.dashboard.name}\" dashboard.\n\n"
             f"Open your invitation (this link expires in "
-            f"{invite_tokens.MAX_AGE_SECONDS // 60} minutes):\n{invite_url}\n"
+            f"{invite_tokens.MAX_AGE_SECONDS // 86400} days):\n{invite_url}\n"
         ),
         to=[invite.email],
     )

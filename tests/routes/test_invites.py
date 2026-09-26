@@ -1,9 +1,8 @@
 from app.extensions import db
-from app.models import Dashboard, Invite
+from app.models import Dashboard, Invite, User
 from unittest.mock import patch
 import smtplib
 
-from app.helpers.dashboard_access import is_dashboard_member
 from app.helpers.invite_tokens import load_invite_token
 from app.helpers.time import utc_now
 from tests.conftest import CSRF_TOKEN, invite_url_token, login, mail_outbox
@@ -188,6 +187,7 @@ def test_create_invite_sends_email_per_new_invite(app, client, user, dashboard):
     outbox = mail_outbox(app)
     assert len(outbox) == 1
     assert outbox[0].to == ["new@example.com"]
+    assert "this link expires in 7 days" in outbox[0].body
     invite = next(i for i in invites_for(dashboard) if i.email == "new@example.com")
     assert load_invite_token(invite_url_token(outbox[0])) == {
         "invite_id": invite.id,
@@ -428,11 +428,12 @@ def test_revoke_json(client, user, dashboard):
 def test_revoked_collaborator_loses_access(client, user, other_user, dashboard):
     invite = add_invite(dashboard, status="accepted", user=other_user)
     login_with_invites_token(client, user)
-    assert is_dashboard_member(dashboard, other_user)
-
     client.post(revoke_path(dashboard, invite), data={"csrf_token": CSRF_TOKEN})
 
-    assert not is_dashboard_member(dashboard, other_user)
+    login(client, other_user)
+    response = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}")
+
+    assert response.status_code == 404
 
 
 def test_revoked_invite_disappears_from_settings(client, user, dashboard):
@@ -561,3 +562,96 @@ def test_settings_page_shows_row_actions_by_status(client, user, dashboard):
     assert f'action="{resend_path(dashboard, rejected)}"' in html
     assert resend_path(dashboard, accepted) not in html
     assert 'id="revokeCollaboratorModal"' in html
+
+
+PROFILE_CSRF = "test-profile-csrf-token"
+NEW_EMAIL = "renamed@example.com"
+
+
+def change_email_via_profile(client, person, email=NEW_EMAIL):
+    login(client, person)
+    with client.session_transaction() as session:
+        session["profile_csrf_token"] = PROFILE_CSRF
+    response = client.post(
+        f"/profile/{person.id}/update-email",
+        data={"email": email, "csrf_token": PROFILE_CSRF},
+    )
+    assert response.status_code == 302
+    assert db.session.get(User, person.id).email == email
+
+
+def invite_emails_sent(app):
+    return [message for message in mail_outbox(app) if "/invitations/" in message.body]
+
+
+def test_accepted_collaborator_keeps_access_after_email_change(
+    client, other_user, dashboard
+):
+    add_invite(dashboard, status="accepted", user=other_user)
+
+    change_email_via_profile(client, other_user)
+    response = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}")
+
+    assert response.status_code == 200
+
+
+def test_inviting_accepted_collaborators_new_email_is_skipped(
+    app, client, user, other_user, dashboard
+):
+    existing = add_invite(dashboard, status="accepted", user=other_user)
+    change_email_via_profile(client, other_user)
+    login_with_invites_token(client, user)
+
+    response = client.post(
+        create_invite_path(dashboard),
+        data={"invite_emails": [NEW_EMAIL], "csrf_token": CSRF_TOKEN},
+    )
+
+    assert response.status_code == 302
+    assert [invite.id for invite in invites_for(dashboard)] == [existing.id]
+    assert invite_emails_sent(app) == []
+    with client.session_transaction() as session:
+        assert ("info", "Those collaborators are already invited.") in session.get(
+            "_flashes", []
+        )
+
+
+def test_inviting_pending_collaborators_new_email_is_skipped(
+    app, client, user, other_user, dashboard
+):
+    existing = add_invite(dashboard, user=other_user)
+    change_email_via_profile(client, other_user)
+    login_with_invites_token(client, user)
+
+    client.post(
+        create_invite_path(dashboard),
+        data={"invite_emails": [NEW_EMAIL], "csrf_token": CSRF_TOKEN},
+    )
+
+    assert [invite.id for invite in invites_for(dashboard)] == [existing.id]
+    assert invite_emails_sent(app) == []
+
+
+def test_inviting_revoked_collaborators_new_email_revives_row(
+    app, client, user, other_user, dashboard
+):
+    revoked = add_invite(dashboard, status="accepted", user=other_user, deleted=True)
+    change_email_via_profile(client, other_user)
+    login_with_invites_token(client, user)
+
+    client.post(
+        create_invite_path(dashboard),
+        data={"invite_emails": [NEW_EMAIL], "csrf_token": CSRF_TOKEN},
+    )
+
+    invites = invites_for(dashboard)
+    sent = invite_emails_sent(app)
+    assert [(i.id, i.email, i.status, i.deleted_at) for i in invites] == [
+        (revoked.id, NEW_EMAIL, "pending", None)
+    ]
+    assert len(sent) == 1
+    assert sent[0].to == [NEW_EMAIL]
+    assert load_invite_token(invite_url_token(sent[0])) == {
+        "invite_id": revoked.id,
+        "email": NEW_EMAIL,
+    }

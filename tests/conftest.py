@@ -1,6 +1,7 @@
 import re
 
 import pytest
+from flask import g
 from sqlalchemy.pool import StaticPool
 from werkzeug.security import generate_password_hash
 
@@ -81,6 +82,9 @@ def dashboard(user):
 
 
 def login(client, user, csrf_token=CSRF_TOKEN):
+    # The app fixture keeps one app context open, so Flask-Login's cached user
+    # in `g` would otherwise survive into requests made as a different user.
+    g.pop("_login_user", None)
     with client.session_transaction() as session:
         session["_user_id"] = str(user.id)
         session["_fresh"] = True

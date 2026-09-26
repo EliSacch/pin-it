@@ -381,3 +381,74 @@ def test_invitation_for_different_email_is_rejected(client, user, dashboard):
 
     assert response.status_code == 302
     assert any("different email" in message for _, message in flashes(client))
+
+
+PROFILE_CSRF = "test-profile-csrf-token"
+NEW_EMAIL = "renamed@example.com"
+
+
+def change_email_via_profile(client, user, email=NEW_EMAIL):
+    login(client, user)
+    with client.session_transaction() as session:
+        session["profile_csrf_token"] = PROFILE_CSRF
+    response = client.post(
+        f"/profile/{user.id}/update-email",
+        data={"email": email, "csrf_token": PROFILE_CSRF},
+    )
+    assert response.status_code == 302
+    assert db.session.get(User, user.id).email == email
+
+
+def live_invites(dashboard):
+    return db.session.scalars(
+        db.select(Invite).where(
+            Invite.dashboard_id == dashboard.id,
+            Invite.deleted_at.is_(None),
+        )
+    ).all()
+
+
+def accepted_member_with_pending_invite_to_new_email(client, other_user, dashboard):
+    old = Invite(
+        dashboard_id=dashboard.id,
+        email=other_user.email,
+        user_id=other_user.id,
+        status="accepted",
+    )
+    db.session.add(old)
+    db.session.commit()
+    new = make_invite(dashboard, email=NEW_EMAIL)
+    change_email_via_profile(client, other_user)
+    login_with_invitations_token(client, other_user)
+    return old, new
+
+
+def test_accepting_invite_to_new_email_collapses_duplicate(client, other_user, dashboard):
+    old, new = accepted_member_with_pending_invite_to_new_email(
+        client, other_user, dashboard
+    )
+    token = generate_invite_token(new)
+
+    response = client.post(f"{invitation_path(token)}/accept", data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(dashboard_path(dashboard))
+    assert db.session.get(Invite, old.id).deleted_at is not None
+    assert [(i.id, i.status, i.email, i.user_id) for i in live_invites(dashboard)] == [
+        (new.id, "accepted", NEW_EMAIL, other_user.id)
+    ]
+    assert client.get(dashboard_path(dashboard)).status_code == 200
+
+
+def test_declining_invite_to_new_email_keeps_membership(client, other_user, dashboard):
+    old, new = accepted_member_with_pending_invite_to_new_email(
+        client, other_user, dashboard
+    )
+    token = generate_invite_token(new)
+
+    response = client.post(f"{invitation_path(token)}/decline", data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 302
+    assert db.session.get(Invite, new.id).deleted_at is not None
+    assert [(i.id, i.status) for i in live_invites(dashboard)] == [(old.id, "accepted")]
+    assert client.get(dashboard_path(dashboard)).status_code == 200

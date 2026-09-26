@@ -4,7 +4,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from flask import current_app
 
 SALT = "dashboard-invite"
-MAX_AGE_SECONDS = 60 * 2  # 2 minutes (temporary, for testing expiry)
+MAX_AGE_SECONDS = 60 * 60 * 24 * 7  # 7 days
 STRICT = object()
 _INVITATION_PATH = re.compile(r"^/invitations/([^/?#]+)$")
 
