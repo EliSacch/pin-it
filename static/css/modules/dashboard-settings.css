@@ -1,0 +1,125 @@
+.dashboard-settings-page {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    justify-content: center;
+    gap: var(--spacing-xl);
+}
+
+.dashboard-settings-page h2 {
+    margin-bottom: var(--spacing-m);
+}
+
+.dashboard-settings-page .info-item {
+    display: grid;
+    grid-template-columns: 150px 350px 1fr;
+    align-items: flex-start;
+    gap: var(--spacing-s);
+    line-height: 2;
+    padding: var(--padding-l) 0;
+}
+
+.dashboard-settings-page .info-item-label,
+.dashboard-settings-page .info-item-value {
+    font-size: 1.2rem;
+}
+
+.dashboard-settings-page span.info-item-value {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-s);
+}
+
+.dashboard-collaborators {
+    display: flex;
+    align-items: start;
+    gap: var(--spacing-m);
+}
+
+.invite-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-m);
+}
+
+.invite-list-item,
+.invite-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-m);
+}
+
+.invite-email {
+    overflow-wrap: anywhere;
+}
+
+.invite-status {
+    padding: 0 var(--padding-m);
+    border: 1px solid currentColor;
+    border-radius: var(--border-radius);
+    font-size: 0.75em;
+}
+
+.invite-status-pending {
+    color: var(--clr-grey);
+}
+
+.invite-status-accepted {
+    color: var(--clr-tertiary);
+}
+
+.invite-status-rejected {
+    color: var(--clr-error);
+}
+
+.invite-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-s);
+}
+
+.invite-actions form {
+    display: contents;
+}
+
+.invite-action-btn {
+    font-size: 0.9em;
+}
+
+@media screen and (min-width: 500px) {
+    .dashboard-settings-page .collaborators-value {
+        grid-column: 2 / -1;
+    }
+
+    .collaborators-value,
+    .dashboard-collaborators,
+    .invite-list,
+    .invite-list-item {
+        display: grid;
+        grid-template-columns: subgrid;
+    }
+
+    .dashboard-collaborators,
+    .invite-list,
+    .invite-list-item {
+        grid-column: 1 / -1;
+    }
+
+    .collaborators-value > .tooltip-container,
+    .invite-list-empty {
+        grid-column: 1;
+        justify-self: start;
+    }
+
+    .invite-list-item {
+        align-items: center;
+    }
+}
+
+@media screen and (max-width: 499px) {
+    .dashboard-settings-page .info-item {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+

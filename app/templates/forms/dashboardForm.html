@@ -1,4 +1,5 @@
 {% from "forms/inputs/textImput.html" import text_input %}
+{% from "forms/inputs/listInput.html" import list_input %}
 {% macro dashboardForm(action, csrf_token, errors={}, values={}, form_id=None) %}
     {% set field_errors = errors if errors is mapping else {"name": errors} %}
     <form {% if form_id %}id="{{ form_id }}" {% endif %}class="dashboard-form"
@@ -24,5 +25,14 @@
             required=true,
             errors=field_errors.get('name', []),
             field_id=(form_id ~ '-name') if form_id else 'name') }}
+        {{ list_input(name="invite_emails",
+            label="Collaborators",
+            values=(values.invite_emails if values else none) or [],
+            item_type="email",
+            item_label="email",
+            required=false,
+            errors=field_errors.get('invite_emails', []),
+            field_id=(form_id ~ '-invite-emails') if form_id else 'invite-emails',
+            hint="Separate email addresses with commas or spaces.") }}
     </form>
 {% endmacro %}

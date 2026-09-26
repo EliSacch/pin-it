@@ -5,7 +5,6 @@
 {% from "forms/dashboardForm.html" import dashboardForm %}
 {% from "forms/noteForm.html" import noteForm %}
 {% from "forms/deleteNoteForm.html" import deleteNoteForm %}
-{% from "forms/deleteDashboardForm.html" import deleteDashboardForm %}
 {% from "macros/tooltip.html" import tooltip %}
 {% from "macros/modal.html" import modal %}
 {% extends "base.html" %}
@@ -62,6 +61,7 @@
                             <div class="note-view{% if note_errors %} hidden-form{% endif %}">
                                 {{ noteWithContent(note, csrf_token, dashboard) }}
                             </div>
+                            {% if note.can_edit is not defined or note.can_edit %}
                             <div class="note-edit{% if not note_errors %} hidden-form{% endif %}">
                                 {{ noteWithForm({
                                     "Form": noteForm(
@@ -77,6 +77,7 @@
                                     )
                                 }) }}
                             </div>
+                            {% endif %}
                         </div>
                     {% endfor %}
                 {% endif %}
@@ -113,22 +114,7 @@
             form_id='addDashboardForm'
         ) %}
         {% set deleteNoteFormHtml = deleteNoteForm(csrf_token) %}
-        {% set deleteDashboardFormHtml = deleteDashboardForm(
-            dashboards_csrf_token,
-            errors=dashboard_errors.get('delete', {})
-        ) %}
         {{ modal('addDashboardModal', 'Add dashboard', addDashboardForm, confirm_action='submit-form') }}
-        {% if dashboard %}
-            {% set editDashboardForm = dashboardForm(
-                url_for('dashboards.update', dashboard_id=dashboard.id),
-                dashboards_csrf_token,
-                errors=dashboard_errors.get('update', {}),
-                values=dashboard_form_values.get('update') or dashboard,
-                form_id='editDashboardForm'
-            ) %}
-            {{ modal('editDashboardModal', 'Edit dashboard', editDashboardForm, confirm_action='submit-form') }}
-        {% endif %}
-        {{ modal('deleteDashboardModal', 'Delete dashboard', deleteDashboardFormHtml, confirm_action='submit-form') }}
         {{ modal('deleteNoteModal', 'Delete note', deleteNoteFormHtml, confirm_action='submit-form') }}
     {% endif %}
 {% endblock %}

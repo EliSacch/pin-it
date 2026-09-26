@@ -15,13 +15,16 @@ from flask import (
 from flask_login import login_user, login_required, current_user, logout_user
 from flask_mailman import EmailMessage
 from sqlalchemy import func, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.extensions import db, login_manager, limiter
 from app.helpers.email import collect_email_errors
 from app.helpers.email_verification import generate_email_token, load_email_token
+from app.helpers.invite_tokens import invite_token_from_next, invited_email_from_next
+from app.helpers.invites import accept_invite, load_invite_for_user
 from app.helpers.password import collect_password_errors
+from app.helpers.redirects import submitted_redirect_target
 from app.helpers.username import collect_username_errors
 from app.models import Dashboard, User
 
@@ -42,11 +45,16 @@ def _register_context(errors=None, username="", email=""):
         csrf_token = secrets.token_urlsafe(32)
         session["register_csrf_token"] = csrf_token
 
+    next_url = submitted_redirect_target(request)
+    invited_email = invited_email_from_next(next_url)
+
     return {
         "action": url_for("auth.register"),
         "csrf_token": csrf_token,
-        "email": email,
+        "email": invited_email or email,
+        "email_locked": invited_email is not None,
         "errors": errors or [],
+        "next_url": next_url,
         "title": "Create your account",
         "username": username,
     }
@@ -57,11 +65,14 @@ def _login_context(errors=None, email=""):
         csrf_token = secrets.token_urlsafe(32)
         session["login_csrf_token"] = csrf_token
 
+    next_url = submitted_redirect_target(request)
+
     return {
         "action": url_for("auth.login"),
         "csrf_token": csrf_token,
-        "email": email,
+        "email": email or invited_email_from_next(next_url) or "",
         "errors": errors or [],
+        "next_url": next_url,
         "title": "Login to your account",
     }
 
@@ -100,6 +111,36 @@ def resend_verification_csrf_token():
     return csrf_token
 
 
+def _auto_accept_invite(user, next_url):
+    token = invite_token_from_next(next_url)
+    if token is None:
+        return None
+
+    invite, error = load_invite_for_user(token, user)
+    if error:
+        flash(error, "warning")
+        return redirect(url_for("main.index"))
+    if invite.status != "pending":
+        return None
+
+    accept_invite(invite, user)
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.exception("Failed to auto-accept invite")
+        return None
+
+    flash(f"Welcome! You joined {invite.dashboard.name}.", "success")
+    return redirect(
+        url_for(
+            "dashboards.get",
+            dashboard_id=invite.dashboard.id,
+            slug=invite.dashboard.slug,
+        )
+    )
+
+
 def _verify_email_redirect():
     if current_user.is_authenticated:
         return redirect(url_for("profile.index"))
@@ -117,7 +158,10 @@ def register():
     }
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
-        email = (request.form.get("email") or "").strip().lower()
+        email = (
+            invited_email_from_next(submitted_redirect_target(request))
+            or (request.form.get("email") or "").strip().lower()
+        )
         password = request.form.get("password") or ""
         confirm_password = request.form.get("confirm_password") or ""
 
@@ -198,7 +242,10 @@ def register():
 
         session.pop("register_csrf_token", None)
         login_user(new_user)
-        return redirect(url_for("main.index"))
+        next_url = submitted_redirect_target(request)
+        return _auto_accept_invite(new_user, next_url) or redirect(
+            next_url or url_for("main.index")
+        )
     return render_template("auth/register.html", **_register_context())
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -234,7 +281,7 @@ def login():
             if user and check_password_hash(user.password_hash, password):
                 login_user(user, remember=remember)
                 flash(f"Welcome back, {user.username}!", "success")
-                return redirect(url_for("main.index"))
+                return redirect(submitted_redirect_target(request) or url_for("main.index"))
             else:
                 errors["form"].append("Invalid email or password.")
         if any(errors.values()):

@@ -5,6 +5,7 @@
 import './ui-common.js';
 import './page-transitions.js';
 import './disclosures.js';
+import './list-input.js';
 import './modals.js';
 import './note-editor.js';
 import './notes-ui.js';

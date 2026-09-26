@@ -1,4 +1,7 @@
+import re
+
 import pytest
+from flask import g
 from sqlalchemy.pool import StaticPool
 from werkzeug.security import generate_password_hash
 
@@ -79,7 +82,26 @@ def dashboard(user):
 
 
 def login(client, user, csrf_token=CSRF_TOKEN):
+    # The app fixture keeps one app context open, so Flask-Login's cached user
+    # in `g` would otherwise survive into requests made as a different user.
+    g.pop("_login_user", None)
     with client.session_transaction() as session:
         session["_user_id"] = str(user.id)
         session["_fresh"] = True
         session["dashboards_csrf_token"] = csrf_token
+
+
+def mail_outbox(app):
+    return getattr(app.extensions["mailman"], "outbox", [])
+
+
+def confirm_url_token(message):
+    match = re.search(r"/verify-email/([^\s]+)", message.body)
+    assert match is not None
+    return match.group(1)
+
+
+def invite_url_token(message):
+    match = re.search(r"/invitations/([^\s]+)", message.body)
+    assert match is not None
+    return match.group(1)

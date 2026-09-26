@@ -1,6 +1,9 @@
 {% macro text_input(name, label, value='', type='text', errors=[], required=false,
-    pattern=none, autocomplete=none, field_id=none) %}
+    pattern=none, autocomplete=none, field_id=none, readonly=false, hint=none) %}
     {% set input_id = field_id if field_id else name %}
+    {% set describedby = [] %}
+    {% if hint %}{% set _ = describedby.append(input_id ~ '-hint') %}{% endif %}
+    {% if errors %}{% set _ = describedby.append(input_id ~ '-errors') %}{% endif %}
     <div class="form-control-wrapper">
         <div class="form-control{% if errors %} is-invalid{% endif %}">
             <input id="{{ input_id }}"
@@ -9,11 +12,16 @@
                    type="{{ type }}"
                    placeholder=" "
                    {% if required %}required{% endif %}
+                   {% if readonly %}readonly{% endif %}
                    {% if pattern %}pattern="{{ pattern }}"{% endif %}
                    {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
-                   {% if errors %}aria-invalid="true" aria-describedby="{{ input_id }}-errors"{% endif %}>
+                   {% if errors %}aria-invalid="true"{% endif %}
+                   {% if describedby %}aria-describedby="{{ describedby | join(' ') }}"{% endif %}>
             <label for="{{ input_id }}">{{ label }}</label>
         </div>
+        {% if hint %}
+            <p class="form-hint" id="{{ input_id }}-hint">{{ hint }}</p>
+        {% endif %}
         <div class="error-msg"
              id="{{ input_id }}-errors"
              role="alert"

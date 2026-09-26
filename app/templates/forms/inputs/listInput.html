@@ -1,0 +1,62 @@
+{% macro list_chip(name, item, item_label) %}
+    <li class="list-input-chip">
+        <span class="list-input-chip-label">{{ item }}</span>
+        <button type="button"
+                class="list-input-chip-remove"
+                aria-label="Remove {{ item_label }} {{ item }}">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+        <input type="hidden" name="{{ name }}" value="{{ item }}">
+    </li>
+{% endmacro %}
+
+{% macro list_input(name, label, values=[], item_type='text', item_label='item',
+    errors=[], required=false, field_id=none, hint=none) %}
+    {% set input_id = field_id if field_id else name %}
+    {% set items = values if values is iterable and values is not string else [] %}
+    {% set describedby = [input_id ~ '-hint'] %}
+    {% if errors %}{% set describedby = describedby + [input_id ~ '-errors'] %}{% endif %}
+    <div class="form-control-wrapper list-input"
+         data-list-input
+         data-item-type="{{ item_type }}"
+         data-item-label="{{ item_label }}">
+        <div class="form-control{% if errors %} is-invalid{% endif %}">
+            <input id="{{ input_id }}"
+                   type="text"
+                   class="list-input-entry"
+                   data-list-name="{{ name }}"
+                   placeholder=" "
+                   autocomplete="off"
+                   {% if item_type == 'email' %}inputmode="email"{% endif %}
+                   {% if required %}aria-required="true"{% endif %}
+                   {% if errors %}aria-invalid="true"{% endif %}
+                   data-describedby="{{ input_id }}-hint"
+                   aria-describedby="{{ describedby | join(' ') }}">
+            <label for="{{ input_id }}">{{ label }}</label>
+        </div>
+        <p class="list-input-hint" id="{{ input_id }}-hint">
+            {{ hint if hint else 'Separate multiple entries with commas or spaces.' }}
+        </p>
+        <ul class="list-input-chips" aria-label="{{ label }}"{% if not items %} hidden{% endif %}>
+            {% for item in items %}
+                {{ list_chip(name, item, item_label) }}
+            {% endfor %}
+        </ul>
+        <template class="list-input-chip-template">
+            {{ list_chip(name, '', item_label) }}
+        </template>
+        <p class="visually-hidden list-input-status" role="status" aria-live="polite"></p>
+        <div class="error-msg"
+             id="{{ input_id }}-errors"
+             role="alert"
+             {% if not errors %} hidden{% endif %}>
+            {% if errors %}
+                <ul>
+                    {% for error in errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </div>
+{% endmacro %}

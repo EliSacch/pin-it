@@ -27,6 +27,7 @@ A web app for your notes
   - [Local Deployment](#local-deployment)
   - [Database migrations](#database-migrations)
   - [Environment variables](#environment-variables)
+  - [Testing emails with Mailtrap](#testing-emails-with-mailtrap)
   - [Formatting templates](#formatting-templates)
   - [JavaScript bundle](#javascript-bundle)
 
@@ -175,6 +176,37 @@ The app requires `DATABASE_URL` to connect to PostgreSQL and `SECRET_KEY` to sec
 Locally, copy `.env.example` to `.env` and fill in real values. `run.py` calls `load_dotenv()` before creating the app, so `python run.py` and `flask --app run …` read that file. python-dotenv is a development dependency (`requirements-dev.txt`); it does not override variables that are already set in the shell.
 
 When deploying, set the same names in the hosting provider's secret/configuration settings. The committed `.env.example` only documents the required format.
+
+### Testing emails with Mailtrap
+
+Locally, emails (such as verification links) are sent to a [Mailtrap](https://mailtrap.io/) sandbox inbox instead of real addresses. Mailtrap catches every message, so you can open and click links without spamming anyone.
+
+1. Create a free Mailtrap account and open **Email Testing → Inboxes**, then select (or create) an inbox.
+2. Open the inbox's **Integration** tab, choose **SMTP**, and copy the host, port, username and password.
+3. Set the mail variables in your local `.env`:
+   ```bash
+   MAIL_SERVER=sandbox.smtp.mailtrap.io
+   MAIL_PORT=2525
+   MAIL_USE_TLS=true
+   MAIL_USERNAME=your_mailtrap_username
+   MAIL_PASSWORD=your_mailtrap_password
+   MAIL_DEFAULT_SENDER=PinIt <noreply@example.com>
+   MAIL_BACKEND=smtp
+   ```
+   `MAIL_BACKEND=smtp` is required. The `.env.example` default, `console`, prints emails in the terminal instead of sending them.
+4. Restart the app (`python run.py`) so the new values are loaded.
+
+To test the flow, do any of the following, then open the Mailtrap inbox:
+
+- Register a new account.
+- On the profile page, click the button that resends the verification email.
+- Change your email address from the profile page.
+
+Click the verification link in the email. Links point to the host the app is running on (e.g. `http://127.0.0.1:5000/verify-email/...`), so the app must still be running when you open them.
+
+If no email arrives, check the terminal. SMTP errors are caught and shown as a flash message rather than crashing the request. The usual causes are wrong credentials, `MAIL_BACKEND` still set to `console`, or a port other than 25, 465, 587 or 2525.
+
+Automated tests don't use Mailtrap. `tests/conftest.py` sets `MAIL_BACKEND` to `locmem`, which keeps sent messages in memory for assertions.
 
 ### Formatting templates
 

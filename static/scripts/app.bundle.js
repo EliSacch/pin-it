@@ -29,7 +29,16 @@
   function clearFormErrors($form) {
     $form.find(".form-errors").prop("hidden", true).empty();
     $form.find(".form-control").removeClass("is-invalid");
-    $form.find("input, select, textarea").removeAttr("aria-invalid aria-describedby");
+    $form.find("input, select, textarea").each(function() {
+      const $field = $(this);
+      const baseDescribedBy = $field.attr("data-describedby");
+      $field.removeAttr("aria-invalid");
+      if (baseDescribedBy) {
+        $field.attr("aria-describedby", baseDescribedBy);
+      } else {
+        $field.removeAttr("aria-describedby");
+      }
+    });
     $form.find(".form-control-wrapper > .error-msg").prop("hidden", true).empty();
   }
   function renderErrorList(messages) {
@@ -50,15 +59,16 @@
         $form.find(".form-errors").html(html).prop("hidden", false);
         return;
       }
-      const $input = $form.find(`[name="${field}"]`).first();
+      const $input = $form.find(`[data-list-name="${field}"], [name="${field}"]`).first();
       if (!$input.length) {
         $form.find(".form-errors").html(html).prop("hidden", false);
         return;
       }
       const $wrapper = $input.closest(".form-control-wrapper");
-      let $error = $wrapper.find(".error-msg").first();
+      let $error = $wrapper.children(".error-msg").first();
       const errorId = $error.attr("id") || `${$input.attr("id") || field}-errors`;
-      $input.attr("aria-invalid", "true").attr("aria-describedby", errorId).closest(".form-control").addClass("is-invalid");
+      const describedBy = [$input.attr("data-describedby"), errorId].filter(Boolean).join(" ");
+      $input.attr("aria-invalid", "true").attr("aria-describedby", describedBy).closest(".form-control").addClass("is-invalid");
       if (!$error.length) {
         $error = $('<div class="error-msg" role="alert"></div>').attr("id", errorId);
         $wrapper.append($error);
@@ -341,15 +351,196 @@
     });
   });
 
-  // static/scripts/modals.js
+  // static/scripts/list-input.js
   var $4 = window.jQuery;
+  var SEPARATOR = /[\s,]+/;
+  var emailProbe = document.createElement("input");
+  emailProbe.type = "email";
+  var itemTypes = {
+    text: {
+      normalize: (value) => value,
+      isValid: () => true,
+      invalidMessage: "Remove invalid entries."
+    },
+    email: {
+      normalize: (value) => value.toLowerCase(),
+      isValid: (value) => {
+        emailProbe.value = value;
+        return emailProbe.checkValidity();
+      },
+      invalidMessage: "Remove or fix invalid email addresses."
+    }
+  };
+  function itemTypeFor($root) {
+    return itemTypes[$root.data("item-type")] || itemTypes.text;
+  }
+  function splitTokens(text) {
+    return (text || "").split(SEPARATOR).map((token) => token.trim()).filter(Boolean);
+  }
+  function entryFor($root) {
+    return $root.find(".list-input-entry").first();
+  }
+  function chipValue($chip) {
+    return $chip.find('input[type="hidden"]').val();
+  }
+  function currentValues($root) {
+    return $root.find(".list-input-chip").map(function() {
+      return chipValue($4(this));
+    }).get();
+  }
+  function announce($root, message) {
+    $root.find(".list-input-status").text(message);
+  }
+  function markChipValidity($root, $chip) {
+    const isValid = itemTypeFor($root).isValid(chipValue($chip));
+    $chip.toggleClass("is-invalid", !isValid);
+    $chip.find(".list-input-chip-invalid").remove();
+    if (!isValid) {
+      $chip.find(".list-input-chip-label").append('<span class="visually-hidden list-input-chip-invalid"> (invalid)</span>');
+    }
+  }
+  function syncState($root) {
+    const $chips = $root.find(".list-input-chip");
+    $root.find(".list-input-chips").prop("hidden", !$chips.length);
+    const $entry = entryFor($root);
+    const itemLabel = $root.data("item-label") || "item";
+    let message = "";
+    if ($chips.filter(".is-invalid").length) {
+      message = itemTypeFor($root).invalidMessage;
+    } else if ($entry.attr("aria-required") === "true" && !$chips.length) {
+      message = `Add at least one ${itemLabel}.`;
+    }
+    $entry.get(0).setCustomValidity(message);
+  }
+  function buildChip($root, value) {
+    const template = $root.find(".list-input-chip-template").get(0);
+    const $chip = $4(template.content.firstElementChild.cloneNode(true));
+    const itemLabel = $root.data("item-label") || "item";
+    $chip.find(".list-input-chip-label").text(value);
+    $chip.find(".list-input-chip-remove").attr("aria-label", `Remove ${itemLabel} ${value}`);
+    $chip.find('input[type="hidden"]').val(value);
+    markChipValidity($root, $chip);
+    return $chip;
+  }
+  function addItems($root, text) {
+    const type = itemTypeFor($root);
+    const existing = new Set(currentValues($root).map(type.normalize));
+    const added = [];
+    splitTokens(text).forEach((token) => {
+      const value = type.normalize(token);
+      if (existing.has(value)) {
+        return;
+      }
+      existing.add(value);
+      $root.find(".list-input-chips").append(buildChip($root, value));
+      added.push(value);
+    });
+    syncState($root);
+    if (added.length) {
+      announce($root, `Added ${added.join(", ")}.`);
+    }
+  }
+  function removeChip($chip, { focusNext = true } = {}) {
+    const $root = $chip.closest("[data-list-input]");
+    const value = chipValue($chip);
+    const $sibling = $chip.next(".list-input-chip").length ? $chip.next(".list-input-chip") : $chip.prev(".list-input-chip");
+    $chip.remove();
+    syncState($root);
+    announce($root, `Removed ${value}.`);
+    if (focusNext) {
+      const $target = $sibling.length ? $sibling.find(".list-input-chip-remove") : entryFor($root);
+      $target.trigger("focus");
+    }
+  }
+  function commitEntry($root) {
+    const $entry = entryFor($root);
+    const text = $entry.val();
+    if (!text || !text.trim()) {
+      $entry.val("");
+      return;
+    }
+    $entry.val("");
+    addItems($root, text);
+  }
+  function setItems($root, values) {
+    $root.find(".list-input-chip").remove();
+    const $chips = $root.find(".list-input-chips");
+    values.forEach((value) => $chips.append(buildChip($root, value)));
+    syncState($root);
+  }
+  function commitListInputs($form) {
+    $form.find("[data-list-input]").each(function() {
+      commitEntry($4(this));
+    });
+  }
+  function initListInput($root) {
+    if ($root.data("list-input-ready")) {
+      return;
+    }
+    $root.data("list-input-ready", true);
+    $root.data("initial-values", currentValues($root));
+    $root.find(".list-input-chip").each(function() {
+      markChipValidity($root, $4(this));
+    });
+    syncState($root);
+  }
+  $4(function() {
+    $4("[data-list-input]").each(function() {
+      initListInput($4(this));
+    });
+    $4(document).on("input", ".list-input-entry", function() {
+      const $entry = $4(this);
+      const value = $entry.val();
+      if (!SEPARATOR.test(value)) {
+        return;
+      }
+      const $root = $entry.closest("[data-list-input]");
+      const endsWithSeparator = /[\s,]$/.test(value);
+      const tokens = splitTokens(value);
+      const pending = endsWithSeparator ? "" : tokens.pop() || "";
+      $entry.val(pending);
+      addItems($root, tokens.join(","));
+    });
+    $4(document).on("keydown", ".list-input-entry", function(event) {
+      const $entry = $4(this);
+      const $root = $entry.closest("[data-list-input]");
+      if (event.key === "Enter" && $entry.val().trim()) {
+        event.preventDefault();
+        commitEntry($root);
+        return;
+      }
+      if (event.key === "Backspace" && !$entry.val()) {
+        const $last = $root.find(".list-input-chip").last();
+        if ($last.length) {
+          event.preventDefault();
+          removeChip($last, { focusNext: false });
+        }
+      }
+    });
+    $4(document).on("focusout", ".list-input-entry", function() {
+      commitEntry($4(this).closest("[data-list-input]"));
+    });
+    $4(document).on("click", ".list-input-chip-remove", function() {
+      removeChip($4(this).closest(".list-input-chip"));
+    });
+    $4(document).on("reset", "form", function() {
+      $4(this).find("[data-list-input]").each(function() {
+        const $root = $4(this);
+        setItems($root, $root.data("initial-values") || []);
+        announce($root, "");
+      });
+    });
+  });
+
+  // static/scripts/modals.js
+  var $5 = window.jQuery;
   var $lastModalTrigger = null;
   function setBackgroundInert(isInert) {
-    $4("body").children().not(".overlay").each(function() {
+    $5("body").children().not(".overlay").each(function() {
       if (isInert) {
-        $4(this).attr("inert", "");
+        $5(this).attr("inert", "");
       } else {
-        $4(this).removeAttr("inert");
+        $5(this).removeAttr("inert");
       }
     });
   }
@@ -396,7 +587,7 @@
   }
   function closeModal($modal) {
     setBackgroundInert(false);
-    const $returnFocus = $lastModalTrigger && $lastModalTrigger.length ? $lastModalTrigger : $4(".modal-trigger").filter('[data-modal="' + $modal.attr("id") + '"]').first();
+    const $returnFocus = $lastModalTrigger && $lastModalTrigger.length ? $lastModalTrigger : $5(".modal-trigger").filter('[data-modal="' + $modal.attr("id") + '"]').first();
     if ($returnFocus.length) {
       $returnFocus.trigger("focus");
     } else if (document.activeElement && $modal[0].contains(document.activeElement)) {
@@ -417,6 +608,7 @@
       return;
     }
     const form = $form.get(0);
+    commitListInputs($form);
     if (typeof form.reportValidity === "function" && !form.reportValidity()) {
       return;
     }
@@ -461,23 +653,23 @@
       setButtonLoading($confirmBtn, false);
     }
   }
-  $4(function() {
-    $4(document).on("click", ".modal-trigger", function() {
-      const $trigger = $4(this);
-      const $modal = $4(`#${$trigger.attr("data-modal")}`);
+  $5(function() {
+    $5(document).on("click", ".modal-trigger", function() {
+      const $trigger = $5(this);
+      const $modal = $5(`#${$trigger.attr("data-modal")}`);
       if ($modal.length) {
         openModal($modal, $trigger);
       }
     });
-    const $modalWithErrors = $4(".overlay").filter(function() {
-      return $4(this).find('.error-msg[role="alert"]:not([hidden]), .form-errors[role="alert"]:not([hidden])').length;
+    const $modalWithErrors = $5(".overlay").filter(function() {
+      return $5(this).find('.error-msg[role="alert"]:not([hidden]), .form-errors[role="alert"]:not([hidden])').length;
     }).first();
     if ($modalWithErrors.length) {
       openModal($modalWithErrors);
       focusFormErrors($modalWithErrors.find("form").first());
     } else {
-      const $formWithErrors = $4("main form").filter(function() {
-        return $4(this).find(
+      const $formWithErrors = $5("main form").filter(function() {
+        return $5(this).find(
           '[aria-invalid="true"], .error-msg[role="alert"]:not([hidden]), .form-errors[role="alert"]:not([hidden])'
         ).length;
       }).first();
@@ -485,14 +677,14 @@
         focusFormErrors($formWithErrors);
       }
     }
-    $4(document).on("click", ".modal-close", function() {
-      const $overlay = $4(this).closest(".overlay");
+    $5(document).on("click", ".modal-close", function() {
+      const $overlay = $5(this).closest(".overlay");
       if ($overlay.length) {
         closeModal($overlay);
       }
     });
-    $4(document).on("click", ".modal-confirm", function() {
-      const $confirmBtn = $4(this);
+    $5(document).on("click", ".modal-confirm", function() {
+      const $confirmBtn = $5(this);
       if ($confirmBtn.prop("disabled")) {
         return;
       }
@@ -505,16 +697,16 @@
         window.location.href = "/logout";
       }
     });
-    $4(document).on("submit", '.overlay[data-confirm="submit-form"] form', function(e) {
+    $5(document).on("submit", '.overlay[data-confirm="submit-form"] form', function(e) {
       e.preventDefault();
-      const $modal = $4(this).closest(".overlay");
+      const $modal = $5(this).closest(".overlay");
       submitModalForm($modal, $modal.find(".modal-confirm").first());
     });
-    $4(document).on("keydown", function(e) {
+    $5(document).on("keydown", function(e) {
       if (e.key !== "Escape") {
         return;
       }
-      const $openModal = $4(".overlay.visible").last();
+      const $openModal = $5(".overlay.visible").last();
       if ($openModal.length) {
         closeModal($openModal);
       }
@@ -522,7 +714,7 @@
   });
 
   // static/scripts/note-editor.js
-  var $5 = window.jQuery;
+  var $6 = window.jQuery;
   var editorsByHolderId = /* @__PURE__ */ new Map();
   function getListTool() {
     return window.EditorjsList || window.List;
@@ -864,9 +1056,9 @@
     $holder.empty();
   }
   async function destroyAllNoteEditors() {
-    const forms = $5(".note-form").toArray();
+    const forms = $6(".note-form").toArray();
     for (let i = 0; i < forms.length; i += 1) {
-      await destroyNoteEditor($5(forms[i]));
+      await destroyNoteEditor($6(forms[i]));
     }
   }
   function getEditorForForm($form) {
@@ -911,7 +1103,7 @@
       return;
     }
     $errorField.prop("hidden", false).html((messages || []).map(function(msg) {
-      return $5("<li>").text(msg)[0].outerHTML;
+      return $6("<li>").text(msg)[0].outerHTML;
     }).join(""));
     const errorId = $errorField.attr("id");
     $title.attr("aria-invalid", "true");
@@ -920,8 +1112,8 @@
     }
     $title.trigger("focus");
   }
-  $5(document).on("submit", ".note-form", function(event) {
-    const $form = $5(this);
+  $6(document).on("submit", ".note-form", function(event) {
+    const $form = $6(this);
     const $errorField = $form.find(".error-msg");
     const title = $form.find(".note-title").val();
     const errors = [];
@@ -966,8 +1158,8 @@
       region.textContent = message;
     }, 50);
   }
-  $5(document).on("change", ".note-todo-checkbox", function() {
-    const $checkbox = $5(this);
+  $6(document).on("change", ".note-todo-checkbox", function() {
+    const $checkbox = $6(this);
     const url = $checkbox.data("toggle-url");
     const csrf = $checkbox.data("csrf");
     if (!url || !csrf) {
@@ -975,7 +1167,7 @@
     }
     const wasChecked = !$checkbox.prop("checked");
     $checkbox.prop("disabled", true);
-    $5.ajax({
+    $6.ajax({
       url,
       method: "POST",
       data: { csrf_token: csrf },
@@ -996,9 +1188,9 @@
       $checkbox.prop("disabled", false);
     });
   });
-  $5(function() {
-    $5(".note-form").each(function() {
-      const $form = $5(this);
+  $6(function() {
+    $6(".note-form").each(function() {
+      const $form = $6(this);
       const $wrapper = $form.closest("#addNoteForm, .note-edit");
       if ($wrapper.length && !$wrapper.hasClass("hidden-form")) {
         initNoteEditor($form);
@@ -1013,7 +1205,7 @@
   };
 
   // static/scripts/notes-ui.js
-  var $6 = window.jQuery;
+  var $7 = window.jQuery;
   function focusNoteForm($form) {
     if (!$form || !$form.length) {
       return;
@@ -1042,8 +1234,8 @@
   }
   function closeAllNoteEdits() {
     const destroyPromises = [];
-    $6(".note-slot").each(function() {
-      const $slot = $6(this);
+    $7(".note-slot").each(function() {
+      const $slot = $7(this);
       const $form = $slot.find(".note-form");
       clearNoteErrors($form);
       if (NoteEditor && typeof NoteEditor.destroy === "function") {
@@ -1056,7 +1248,7 @@
     return Promise.all(destroyPromises);
   }
   function closeAddNoteForm() {
-    const $addForm = $6("#addNoteForm");
+    const $addForm = $7("#addNoteForm");
     const $form = $addForm.find(".note-form");
     clearNoteErrors($form);
     let destroyPromise = Promise.resolve();
@@ -1067,9 +1259,9 @@
     $addForm.addClass("hidden-form");
     return destroyPromise;
   }
-  $6(function() {
-    $6(document).on("click", ".edit-btn", function() {
-      const $slot = $6(this).closest(".note-slot");
+  $7(function() {
+    $7(document).on("click", ".edit-btn", function() {
+      const $slot = $7(this).closest(".note-slot");
       if (!$slot.length) {
         return;
       }
@@ -1083,9 +1275,9 @@
         });
       });
     });
-    $6(document).on("click", ".note-form .cancel-btn", function() {
-      const $form = $6(this).closest(".note-form");
-      const $slot = $6(this).closest(".note-slot");
+    $7(document).on("click", ".note-form .cancel-btn", function() {
+      const $form = $7(this).closest(".note-form");
+      const $slot = $7(this).closest(".note-slot");
       clearNoteErrors($form);
       const destroyPromise = NoteEditor && typeof NoteEditor.destroy === "function" ? NoteEditor.destroy($form) : Promise.resolve();
       destroyPromise.then(function() {
@@ -1095,15 +1287,15 @@
           $slot.find(".note-view").removeClass("hidden-form");
           $slot.find(".edit-btn").first().trigger("focus");
         } else {
-          $6("#addNoteForm").addClass("hidden-form");
-          $6("#addNoteButton").trigger("focus");
+          $7("#addNoteForm").addClass("hidden-form");
+          $7("#addNoteButton").trigger("focus");
         }
       });
     });
-    $6("#addNoteButton").click(() => {
+    $7("#addNoteButton").click(() => {
       closeOptionsMenu(false);
       closeAllNoteEdits().then(function() {
-        const $addForm = $6("#addNoteForm");
+        const $addForm = $7("#addNoteForm");
         $addForm.removeClass("hidden-form");
         const $form = $addForm.find(".note-form");
         const initPromise = NoteEditor && typeof NoteEditor.init === "function" ? NoteEditor.init($form) : Promise.resolve();
@@ -1115,36 +1307,39 @@
   });
 
   // static/scripts/profile-inline.js
-  var $7 = window.jQuery;
+  var $8 = window.jQuery;
+  var editButtonSelector = ".profile-inline-edit-btn, [data-inline-editor-trigger]";
+  var editPanelSelector = ".profile-inline-edit, [data-inline-editor-panel]";
+  var viewSelector = ".profile-inline-view, [data-inline-editor-view]";
   function closeProfileInlineEditor($item) {
     const $form = $item.find("form");
     $form.trigger("reset");
     $form.find(".error-msg").prop("hidden", true).find("ul").empty();
     $form.find("[aria-invalid]").removeAttr("aria-invalid aria-describedby");
-    $item.find(".profile-inline-edit").addClass("hidden-form");
-    $item.find(".profile-inline-view").removeClass("hidden-form");
-    $item.find(".profile-inline-edit-btn").attr("aria-expanded", "false").first().trigger("focus");
+    $item.find(editPanelSelector).addClass("hidden-form");
+    $item.find(viewSelector).removeClass("hidden-form");
+    $item.find(editButtonSelector).attr("aria-expanded", "false").first().trigger("focus");
   }
-  $7(function() {
-    $7(document).on("click", ".profile-inline-edit-btn", function() {
-      const $item = $7(this).closest("[data-inline-editor]");
-      $item.find(".profile-inline-view").addClass("hidden-form");
-      $item.find(".profile-inline-edit").removeClass("hidden-form");
-      $7(this).attr("aria-expanded", "true");
-      $item.find('.profile-inline-edit input:not([type="hidden"])').first().trigger("focus");
+  $8(function() {
+    $8(document).on("click", editButtonSelector, function() {
+      const $item = $8(this).closest("[data-inline-editor]");
+      $item.find(viewSelector).addClass("hidden-form");
+      $item.find(editPanelSelector).removeClass("hidden-form");
+      $8(this).attr("aria-expanded", "true");
+      $item.find(editPanelSelector).find('input:not([type="hidden"])').first().trigger("focus");
     });
-    $7(document).on("click", "[data-inline-editor] .cancel-btn", function() {
-      closeProfileInlineEditor($7(this).closest("[data-inline-editor]"));
+    $8(document).on("click", "[data-inline-editor] .cancel-btn", function() {
+      closeProfileInlineEditor($8(this).closest("[data-inline-editor]"));
     });
-    $7(document).on("keydown", "[data-inline-editor]", function(event) {
+    $8(document).on("keydown", "[data-inline-editor]", function(event) {
       if (event.key !== "Escape") {
         return;
       }
-      const $item = $7(this);
-      if (!$item.find(".profile-inline-edit").hasClass("hidden-form")) {
+      const $item = $8(this);
+      if (!$item.find(editPanelSelector).hasClass("hidden-form")) {
         closeProfileInlineEditor($item);
       }
     });
-    $7('[data-inline-editor] .profile-inline-edit:not(.hidden-form) input[aria-invalid="true"]').first().trigger("focus");
+    $8("[data-inline-editor]").find(editPanelSelector).filter(":not(.hidden-form)").find('input[aria-invalid="true"]').first().trigger("focus");
   });
 })();

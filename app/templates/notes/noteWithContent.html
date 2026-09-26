@@ -1,6 +1,7 @@
 {% from "notes/noteWrapper.html" import noteWrapper %}
 {% from "notes/macros/noteActions.html" import noteActions %}
 {% macro noteWithContent(note, csrf_token, dashboard) %}
+    {% set can_edit = note.can_edit is not defined or note.can_edit %}
     {% set content %}
         {% for block in note.content_blocks %}
             {% if block.type == 'todo' %}
@@ -8,8 +9,12 @@
                     <input type="checkbox"
                            class="note-todo-checkbox"
                            {% if block.isChecked %}checked{% endif %}
+                           {% if can_edit %}
                            data-toggle-url="{{ url_for('notes.toggle_todo', dashboard_id=dashboard.id, note_id=note.id, block_index=loop.index0) }}"
-                           data-csrf="{{ csrf_token }}">
+                           data-csrf="{{ csrf_token }}"
+                           {% else %}
+                           disabled
+                           {% endif %}>
                     <span class="note-todo-text">{{ block.text }}</span>
                 </label>
             {% else %}
@@ -17,5 +22,5 @@
             {% endif %}
         {% endfor %}
     {% endset %}
-    {{ noteWrapper(note.title, content, noteActions(note, csrf_token, dashboard)) }}
+    {{ noteWrapper(note.title, content, noteActions(note, csrf_token, dashboard, can_edit)) }}
 {% endmacro %}

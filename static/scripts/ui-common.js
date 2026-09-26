@@ -43,7 +43,16 @@ export function formSubmitButtons($form) {
 export function clearFormErrors($form) {
     $form.find('.form-errors').prop('hidden', true).empty();
     $form.find('.form-control').removeClass('is-invalid');
-    $form.find('input, select, textarea').removeAttr('aria-invalid aria-describedby');
+    $form.find('input, select, textarea').each(function () {
+        const $field = $(this);
+        const baseDescribedBy = $field.attr('data-describedby');
+        $field.removeAttr('aria-invalid');
+        if (baseDescribedBy) {
+            $field.attr('aria-describedby', baseDescribedBy);
+        } else {
+            $field.removeAttr('aria-describedby');
+        }
+    });
     $form.find('.form-control-wrapper > .error-msg').prop('hidden', true).empty();
 }
 
@@ -72,18 +81,19 @@ export function showFormErrors($form, errors) {
             return;
         }
 
-        const $input = $form.find(`[name="${field}"]`).first();
+        const $input = $form.find(`[data-list-name="${field}"], [name="${field}"]`).first();
         if (!$input.length) {
             $form.find('.form-errors').html(html).prop('hidden', false);
             return;
         }
 
         const $wrapper = $input.closest('.form-control-wrapper');
-        let $error = $wrapper.find('.error-msg').first();
+        let $error = $wrapper.children('.error-msg').first();
         const errorId = $error.attr('id') || `${$input.attr('id') || field}-errors`;
+        const describedBy = [$input.attr('data-describedby'), errorId].filter(Boolean).join(' ');
         $input
             .attr('aria-invalid', 'true')
-            .attr('aria-describedby', errorId)
+            .attr('aria-describedby', describedBy)
             .closest('.form-control')
             .addClass('is-invalid');
 

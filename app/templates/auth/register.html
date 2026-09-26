@@ -5,6 +5,7 @@
 {% block formContent %}
     <form id="register" action="{{ action }}" method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
         {% if errors.form %}
             <div class="error-msg" role="alert">
                 <ul>
@@ -28,7 +29,9 @@
             errors=errors.email,
             required=true,
             pattern="[^@\s]+@[^@\s]+\.[^@\s]+",
-            autocomplete="email") }}
+            autocomplete="email",
+            readonly=email_locked,
+            hint="This is the address you were invited with." if email_locked else none) }}
         {{ text_input(name="password",
             label="Password",
             value=password,
@@ -45,5 +48,5 @@
             required=true,) }}
         <div class="form-footer">{{ button('Register', 'Signing up...') }}</div>
     </form>
-    <p>Already have an account? <a href="{{ url_for('auth.login') }}">Login</a></p>
+    <p>Already have an account? <a href="{{ url_for('auth.login', next=next_url) if next_url else url_for('auth.login') }}">Login</a></p>
 {% endblock %}

@@ -16,6 +16,7 @@ class Dashboard(db.Model):
     is_default = db.Column(db.Boolean, nullable=False, default=False)
     notes = db.relationship("Note", back_populates="dashboard", cascade="all, delete-orphan")
     owner = db.relationship("User", back_populates="dashboards")
+    invites = db.relationship("Invite", back_populates="dashboard", cascade="all, delete-orphan")
     created_at = db.Column(UTCDateTime, default=utc_now, index=True)
     updated_at = db.Column(UTCDateTime, default=utc_now, onupdate=utc_now)
 

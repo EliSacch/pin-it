@@ -66,7 +66,15 @@
                         <li {% if dashboard is defined and dashboard and item.id == dashboard.id %}class="active"{% endif %}>
                             <a href="{{ url_for('dashboards.get', dashboard_id=item.id, slug=item.slug) }}"
                                {% if dashboard is defined and dashboard and item.id == dashboard.id %}aria-current="page"{% endif %}>
-                                {{ item.name }}
+                                <span class="dashboard-nav-label">
+                                    <span class="dashboard-nav-name">{{ item.name }}</span>
+                                    {% if item.is_shared %}
+                                        <i class="fa-solid fa-user-group dashboard-shared-icon" aria-hidden="true"></i>
+                                    {% endif %}
+                                </span>
+                                {% if item.is_shared %}
+                                    <span class="dashboard-nav-owner"><span class="visually-hidden">shared </span>by {{ item.owner_username }}</span>
+                                {% endif %}
                             </a>
                         </li>
                     {% endfor %}
@@ -74,7 +82,7 @@
                 </nav>
             {% endif %}
             {% if dashboard is defined and dashboard %}
-                {{ dashboardHeader(dashboard) }}
+                {{ dashboardHeader(dashboard, is_owner is defined and is_owner) }}
             {% else %}
                 {% if request.endpoint == 'profile.index' %}
                     {% set logo_text %}{{ current_user.is_authenticated and current_user.username + "'s" }} Profile{% endset %}
@@ -82,7 +90,7 @@
                         {% set logo_text %}{{ current_user.is_authenticated and current_user.username + "'s" or "My" }} Notes{% endset %}
                         {% endif %}
                         <div id="logo">
-                            {% if request.endpoint in ['auth.login', 'auth.register', 'auth.change_password'] %}
+                            {% if request.endpoint in ['auth.login', 'auth.register', 'auth.change_password', 'invitations.show'] %}
                                 <p class="site-title">{{ logo_text }}</p>
                             {% else %}
                                 <h1>{{ logo_text }}</h1>
