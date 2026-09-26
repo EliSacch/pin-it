@@ -132,6 +132,12 @@ header :is(a, button):focus-visible {
     text-align: left;
 }
 
+#dashboards-list .dashboard-shared-icon {
+    margin-left: var(--spacing-m);
+    font-size: 0.8em;
+    opacity: .7;
+}
+
 #dashboards-list li a:hover,
 #dashboards-list li a:focus {
     color: var(--clr-dark);

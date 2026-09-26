@@ -10,6 +10,7 @@ from app.helpers.invites import (
     collect_invite_email_errors,
     create_invites,
     normalized_invite_emails,
+    send_invite_emails,
     submitted_invite_emails,
 )
 from app.models import Dashboard
@@ -131,7 +132,15 @@ def create(dashboard_id):
             redirect_url=settings_url,
         )
 
-    if created:
+    failed = send_invite_emails(created)
+    if failed:
+        flash(
+            "Collaborators added, but we could not email: "
+            + ", ".join(invite.email for invite in failed)
+            + ".",
+            "warning",
+        )
+    elif created:
         flash("Collaborators added.", "success")
     else:
         flash("Those collaborators are already invited.", "info")

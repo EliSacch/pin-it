@@ -6,10 +6,16 @@ from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
+from app.helpers.dashboard_access import (
+    can_manage_note,
+    get_member_dashboard_or_404,
+    member_dashboards,
+)
 from app.helpers.invites import (
     collect_invite_email_errors,
     create_invites,
     normalized_invite_emails,
+    send_invite_emails,
     submitted_invite_emails,
 )
 from app.models import Dashboard, Invite, Note
@@ -69,6 +75,16 @@ def _owned_dashboards():
     )
 
 
+def _nav_dashboards():
+    items = []
+    for dashboard in member_dashboards(current_user):
+        item = dashboard.to_dict()
+        item["is_shared"] = dashboard.owner_id != current_user.id
+        item["owner_username"] = dashboard.owner.username
+        items.append(item)
+    return items
+
+
 def _redirect_with_form_errors(form_key, errors, values=None, redirect_url=None):
     form_key = str(form_key)
     session[_DASHBOARD_FORM_ERRORS_KEY] = {form_key: errors}
@@ -122,24 +138,24 @@ def dashboard_view_context(dashboard):
         _notes_csrf_token,
     )
 
-    dashboards = [item.to_dict() for item in _owned_dashboards()]
+    dashboards = _nav_dashboards()
 
-    if dashboard is None:
-        notes = []
-    else:
-        notes = [
-            note.to_dict()
-            for note in db.session.scalars(
-                db.select(Note)
-                .where(Note.dashboard_id == dashboard.id)
-                .order_by(Note.created_at.asc())
-            )
-        ]
+    notes = []
+    if dashboard is not None:
+        for note in db.session.scalars(
+            db.select(Note)
+            .where(Note.dashboard_id == dashboard.id)
+            .order_by(Note.created_at.asc())
+        ):
+            item = note.to_dict()
+            item["can_edit"] = can_manage_note(note, dashboard, current_user)
+            notes.append(item)
 
     return {
         "page_title": dashboard.name if dashboard else "Home",
         "dashboards": dashboards,
         "dashboard": dashboard.to_dict() if dashboard else None,
+        "is_owner": dashboard is not None and dashboard.owner_id == current_user.id,
         "notes": notes,
         "csrf_token": _notes_csrf_token(),
         "dashboards_csrf_token": _dashboards_csrf_token(),
@@ -153,24 +169,9 @@ def dashboard_view_context(dashboard):
 @dashboards_bp.route("/<int:dashboard_id>/<slug>")
 @login_required
 def get(dashboard_id, slug):
-    dashboard = db.session.get(Dashboard, dashboard_id)
-    notes = db.session.scalars(
-        db.select(Note)
-        .where(Note.dashboard_id == dashboard_id)
-        .order_by(Note.created_at.asc())
-    )
-
-    if not dashboard or dashboard.owner_id != current_user.id:
-        abort(404)
+    dashboard = get_member_dashboard_or_404(dashboard_id)
     if dashboard.slug != slug:
-        return redirect(
-            url_for(
-                "dashboards.get",
-                dashboard_id=dashboard.id,
-                slug=dashboard.slug,
-                notes=notes,
-            )
-        )
+        return redirect(_dashboard_url(dashboard))
     return render_template("index.html", **dashboard_view_context(dashboard))
 
 
@@ -205,7 +206,8 @@ def settings(dashboard_id, slug):
     return render_template(
         "dashboards/settings.html",
         dashboard=dashboard.to_dict(),
-        dashboards=[item.to_dict() for item in _owned_dashboards()],
+        dashboards=_nav_dashboards(),
+        is_owner=True,
         invites=invites,
         dashboards_csrf_token=_dashboards_csrf_token(),
         invites_csrf_token=_invites_csrf_token(),
@@ -247,7 +249,7 @@ def create():
             is_default=False,
         )
         db.session.add(new_dashboard)
-        create_invites(new_dashboard, invite_emails)
+        created_invites = create_invites(new_dashboard, invite_emails)
         try:
             db.session.commit()
             session.pop("dashboards_csrf_token", None)
@@ -265,6 +267,14 @@ def create():
             )
 
         flash("Dashboard created successfully.", "success")
+        failed = send_invite_emails(created_invites)
+        if failed:
+            flash(
+                "We could not email: "
+                + ", ".join(invite.email for invite in failed)
+                + ".",
+                "warning",
+            )
         redirect_url = url_for(
             "dashboards.get",
             dashboard_id=new_dashboard.id,

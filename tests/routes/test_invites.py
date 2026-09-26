@@ -1,6 +1,10 @@
 from app.extensions import db
 from app.models import Dashboard, Invite
-from tests.conftest import CSRF_TOKEN, login
+from unittest.mock import patch
+import smtplib
+
+from app.helpers.invite_tokens import load_invite_token
+from tests.conftest import CSRF_TOKEN, invite_url_token, login, mail_outbox
 
 JSON_HEADERS = {"X-Requested-With": "XMLHttpRequest"}
 
@@ -164,6 +168,50 @@ def test_create_invite_skips_existing_invites(client, user, other_user, dashboar
     assert [invite.id for invite in invites if invite.email == "other@example.com"] == [
         existing.id
     ]
+
+
+def test_create_invite_sends_email_per_new_invite(app, client, user, dashboard):
+    db.session.add(Invite(dashboard_id=dashboard.id, email="old@example.com"))
+    db.session.commit()
+    login_with_invites_token(client, user)
+
+    client.post(
+        create_invite_path(dashboard),
+        data={
+            "invite_emails": ["old@example.com", "new@example.com"],
+            "csrf_token": CSRF_TOKEN,
+        },
+    )
+
+    outbox = mail_outbox(app)
+    assert len(outbox) == 1
+    assert outbox[0].to == ["new@example.com"]
+    invite = next(i for i in invites_for(dashboard) if i.email == "new@example.com")
+    assert load_invite_token(invite_url_token(outbox[0])) == {
+        "invite_id": invite.id,
+        "email": "new@example.com",
+    }
+
+
+def test_create_invite_warns_when_email_fails(app, client, user, dashboard):
+    login_with_invites_token(client, user)
+
+    with patch(
+        "app.helpers.invites.EmailMessage.send",
+        side_effect=smtplib.SMTPException("down"),
+    ):
+        response = client.post(
+            create_invite_path(dashboard),
+            data={"invite_emails": ["new@example.com"], "csrf_token": CSRF_TOKEN},
+        )
+
+    assert response.status_code == 302
+    assert [invite.email for invite in invites_for(dashboard)] == ["new@example.com"]
+    with client.session_transaction() as session:
+        assert (
+            "warning",
+            "Collaborators added, but we could not email: new@example.com.",
+        ) in session.get("_flashes", [])
 
 
 def test_create_invite_reports_when_all_already_invited(

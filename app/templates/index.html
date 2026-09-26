@@ -61,6 +61,7 @@
                             <div class="note-view{% if note_errors %} hidden-form{% endif %}">
                                 {{ noteWithContent(note, csrf_token, dashboard) }}
                             </div>
+                            {% if note.can_edit is not defined or note.can_edit %}
                             <div class="note-edit{% if not note_errors %} hidden-form{% endif %}">
                                 {{ noteWithForm({
                                     "Form": noteForm(
@@ -76,6 +77,7 @@
                                     )
                                 }) }}
                             </div>
+                            {% endif %}
                         </div>
                     {% endfor %}
                 {% endif %}

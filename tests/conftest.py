@@ -95,3 +95,9 @@ def confirm_url_token(message):
     match = re.search(r"/verify-email/([^\s]+)", message.body)
     assert match is not None
     return match.group(1)
+
+
+def invite_url_token(message):
+    match = re.search(r"/invitations/([^\s]+)", message.body)
+    assert match is not None
+    return match.group(1)

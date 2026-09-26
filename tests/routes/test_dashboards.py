@@ -1,6 +1,6 @@
 from app.extensions import db
 from app.models import Dashboard, Invite
-from tests.conftest import CSRF_TOKEN, login
+from tests.conftest import CSRF_TOKEN, invite_url_token, login, mail_outbox
 
 JSON_HEADERS = {"X-Requested-With": "XMLHttpRequest"}
 
@@ -21,6 +21,74 @@ def invites_for(dashboard):
     return db.session.scalars(
         db.select(Invite).where(Invite.dashboard_id == dashboard.id)
     ).all()
+
+
+def add_collaborator(dashboard, person):
+    db.session.add(
+        Invite(
+            dashboard_id=dashboard.id,
+            email=person.email,
+            user_id=person.id,
+            status="accepted",
+        )
+    )
+    db.session.commit()
+
+
+def test_collaborator_can_view_shared_dashboard_and_sees_it_in_nav(
+    client, user, other_user, dashboard
+):
+    add_collaborator(dashboard, other_user)
+    login(client, other_user)
+
+    response = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}")
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert f'href="/dashboards/{dashboard.id}/{dashboard.slug}"' in html
+    assert "(shared by elisa)" in html
+    assert 'aria-label="Dashboard settings"' not in html
+
+
+def test_pending_invitee_cannot_view_dashboard(client, other_user, dashboard):
+    db.session.add(
+        Invite(dashboard_id=dashboard.id, email=other_user.email, user_id=other_user.id)
+    )
+    db.session.commit()
+    login(client, other_user)
+
+    response = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}")
+
+    assert response.status_code == 404
+
+
+def test_collaborator_cannot_manage_dashboard(client, other_user, dashboard):
+    add_collaborator(dashboard, other_user)
+    login(client, other_user)
+
+    settings_response = client.get(settings_path(dashboard))
+    update_response = client.post(
+        update_path(dashboard), data={"name": "Taken", "csrf_token": CSRF_TOKEN}
+    )
+    delete_response = client.post(
+        f"/dashboards/{dashboard.id}/delete",
+        data={"csrf_token": CSRF_TOKEN},
+        headers=JSON_HEADERS,
+    )
+
+    db.session.refresh(dashboard)
+    assert settings_response.status_code == 404
+    assert update_response.status_code == 404
+    assert delete_response.status_code == 400
+    assert dashboard.name == "Work"
+
+
+def test_owner_sees_settings_gear(client, user, dashboard):
+    login(client, user)
+
+    html = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}").get_data(as_text=True)
+
+    assert 'aria-label="Dashboard settings"' in html
 
 
 def test_create_requires_login(client):
@@ -48,6 +116,24 @@ def test_create_dashboard_without_invite_emails(client, user):
     assert created.owner_id == user.id
     assert invites_for(created) == []
     assert response.headers["Location"].endswith(f"/dashboards/{created.id}/ideas")
+
+
+def test_create_dashboard_sends_invite_emails(app, client, user):
+    login(client, user)
+
+    client.post(
+        create_path(),
+        data={
+            "name": "Shared",
+            "csrf_token": CSRF_TOKEN,
+            "invite_emails": ["a@example.com", "b@example.com"],
+        },
+        headers=JSON_HEADERS,
+    )
+
+    outbox = mail_outbox(app)
+    assert sorted(message.to[0] for message in outbox) == ["a@example.com", "b@example.com"]
+    assert all(invite_url_token(message) for message in outbox)
 
 
 def test_create_dashboard_with_invite_emails(client, user, other_user):

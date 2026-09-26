@@ -85,6 +85,29 @@
     border-bottom: 1px solid var(--clr-error);
 }
 
+.form-control input[readonly] {
+    border-bottom-style: solid;
+    color: var(--clr-grey);
+    cursor: not-allowed;
+}
+
+.invitation-details {
+    text-align: center;
+}
+
+.invitation-actions {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-l);
+    margin-top: var(--spacing-xl);
+}
+
+.form-hint {
+    margin-top: var(--spacing-m);
+    font-size: 0.8em;
+    color: var(--clr-grey);
+}
+
 /* --------------------------- List input */
 
 .list-input-hint {

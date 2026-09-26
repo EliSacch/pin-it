@@ -1,10 +1,10 @@
 {% from "macros/tooltip.html" import tooltip %}
-{% macro dashboardHeader(dashboard) %}
+{% macro dashboardHeader(dashboard, is_owner=false) %}
     <div id="logo">
         <h1>{{ dashboard.name }}</h1>
     </div>
     <div class="dashboard-header-actions">
-        {% if dashboard.is_default != True %}
+        {% if is_owner and dashboard.is_default != True %}
             {% if request.endpoint == 'dashboards.settings' %}
                 {{ tooltip('<a href="' ~ url_for('dashboards.get', dashboard_id=dashboard.id, slug=dashboard.slug) ~ '"
                     class="base-button link-light"

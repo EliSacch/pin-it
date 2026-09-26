@@ -1,7 +1,12 @@
+import smtplib
+
+from flask import current_app, url_for
+from flask_mailman import EmailMessage
 from sqlalchemy import func
 
 from app.extensions import db
 from app.helpers.email import collect_email_errors
+from app.helpers.invite_tokens import STRICT, generate_invite_token, load_invite_token
 from app.models import Invite, User
 
 
@@ -87,3 +92,65 @@ def create_invites(dashboard, emails):
         db.session.add(invite)
         invites.append(invite)
     return invites
+
+
+INVALID_INVITE_MESSAGE = "This invitation link is invalid."
+EXPIRED_INVITE_MESSAGE = (
+    "This invitation link has expired. Ask the dashboard owner to invite you again."
+)
+MISMATCHED_INVITE_MESSAGE = (
+    "This invitation was sent to a different email address. "
+    "Log in with the invited account to open it."
+)
+
+
+def load_invite_for_user(token, user, max_age=STRICT):
+    """Returns (invite, None) on success or (None, error_message)."""
+    data = load_invite_token(token, max_age=max_age)
+    if data == "expired":
+        return None, EXPIRED_INVITE_MESSAGE
+    if not isinstance(data, dict):
+        return None, INVALID_INVITE_MESSAGE
+
+    invite = db.session.get(Invite, data.get("invite_id"))
+    if invite is None or invite.deleted_at is not None or invite.email != data.get("email"):
+        return None, INVALID_INVITE_MESSAGE
+    if invite.email.lower() != (user.email or "").lower():
+        return None, MISMATCHED_INVITE_MESSAGE
+    return invite, None
+
+
+def accept_invite(invite, user):
+    invite.status = "accepted"
+    invite.user_id = user.id
+
+
+def decline_invite(invite, user):
+    invite.status = "rejected"
+    invite.user_id = user.id
+
+
+def send_invite_email(invite):
+    token = generate_invite_token(invite)
+    invite_url = url_for("invitations.show", token=token, _external=True)
+    msg = EmailMessage(
+        subject="You were invited to a PinIt dashboard",
+        body=(
+            f"Hi,\n\nYou were invited to collaborate on the "
+            f"\"{invite.dashboard.name}\" dashboard.\n\n"
+            f"Open your invitation (this link expires in 10 minutes):\n{invite_url}\n"
+        ),
+        to=[invite.email],
+    )
+    msg.send()
+
+
+def send_invite_emails(invites):
+    failed = []
+    for invite in invites:
+        try:
+            send_invite_email(invite)
+        except (OSError, smtplib.SMTPException):
+            current_app.logger.exception("Failed to send invite email")
+            failed.append(invite)
+    return failed

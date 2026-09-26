@@ -6,6 +6,7 @@
 {% block formContent %}
     <form id="login" action="{{ action }}" method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
         {% if errors.form %}
             <div class="error-msg" role="alert">
                 <ul>
@@ -33,5 +34,5 @@
         {{ checkbox_input(name="remember", label="Remember me") }}
         <div class="form-footer">{{ button('Login', 'Signing in...') }}</div>
     </form>
-    <p>Don't have an account? <a href="{{ url_for('auth.register') }}">Register</a></p>
+    <p>Don't have an account? <a href="{{ url_for('auth.register', next=next_url) if next_url else url_for('auth.register') }}">Register</a></p>
 {% endblock %}

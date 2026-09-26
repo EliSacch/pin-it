@@ -1,6 +1,7 @@
 {% from "macros/tooltip.html" import tooltip %}
-{% macro noteActions(note, csrf_token, dashboard) %}
+{% macro noteActions(note, csrf_token, dashboard, can_edit=true) %}
     <span class="note-actions-created-at">{{ note.created_at if note else "" }}</span>
+    {% if can_edit %}
     <div class="note-action-buttons">
         {{ tooltip('<button type="button"
             class="delete-btn modal-trigger"
@@ -11,4 +12,5 @@
             </button>', 'Delete', 'bottom') }}
     {{ tooltip('<button type="button" class="edit-btn" aria-label="Edit note"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>', 'Edit', 'bottom') }}
     </div>
+    {% endif %}
 {% endmacro %}

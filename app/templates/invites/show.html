@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "macros/button.html" import button %}
+{% block title %}Invitation{% endblock %}
+{% block content %}
+    <main id="main-content">
+        <section class="form-wrapper invitation" aria-labelledby="invitation-title">
+            <h1 id="invitation-title">You were invited.</h1>
+            <p class="invitation-details">
+                <strong>{{ owner_username }}</strong> invited you to collaborate on the
+                <strong>{{ invite_dashboard.name }}</strong> dashboard.
+            </p>
+            <div class="invitation-actions">
+                <form action="{{ url_for('invitations.decline', token=token) }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ button('Decline', 'Declining...', variant='secondary') }}
+                </form>
+                <form action="{{ url_for('invitations.accept', token=token) }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ button('Accept', 'Joining...') }}
+                </form>
+            </div>
+        </section>
+    </main>
+{% endblock %}

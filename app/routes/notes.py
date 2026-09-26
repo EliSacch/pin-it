@@ -3,12 +3,13 @@ import secrets
 import json
 import re
 
-from flask import Blueprint, abort, flash, jsonify, redirect, request, session, url_for
+from flask import Blueprint, flash, jsonify, redirect, request, session, url_for
 from flask_login import login_required, current_user
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
-from app.models import Dashboard, Note
+from app.helpers.dashboard_access import can_manage_note, get_member_dashboard_or_404
+from app.models import Note
 
 notes_bp = Blueprint("notes", __name__, url_prefix="/dashboards/<int:dashboard_id>/notes")
 _NOTE_FORM_ERRORS_KEY = "note_form_errors"
@@ -145,17 +146,18 @@ def _content_blocks_plain_text_length(blocks):
     return total
 
 
-def _get_owned_dashboard(dashboard_id):
-    dashboard = db.session.get(Dashboard, dashboard_id)
-    if not dashboard or dashboard.owner_id != current_user.id:
-        abort(404)
-    return dashboard
+def _can_manage(note, dashboard):
+    return (
+        note is not None
+        and note.dashboard_id == dashboard.id
+        and can_manage_note(note, dashboard, current_user)
+    )
 
 
 @notes_bp.route("/create", methods=["GET", "POST"])
 @login_required
 def create(dashboard_id):
-    dashboard = _get_owned_dashboard(dashboard_id)
+    dashboard = get_member_dashboard_or_404(dashboard_id)
     if request.method == "POST":
         errors = []
         title = request.form.get("title", "")
@@ -206,7 +208,7 @@ def create(dashboard_id):
 def update(dashboard_id, note_id):
     dashboard = _get_owned_dashboard(dashboard_id)
     note = db.session.get(Note, note_id)
-    if not note or note.owner_id != current_user.id or note.dashboard_id != dashboard.id:
+    if not _can_manage(note, dashboard):
         flash("You are not authorized to edit this note.", "error")
         return _redirect_to_dashboard(dashboard)
     if request.method == "POST":
@@ -259,9 +261,9 @@ def _wants_json():
 @notes_bp.route("/<int:note_id>/todos/<int:block_index>/toggle", methods=["POST"])
 @login_required
 def toggle_todo(dashboard_id, note_id, block_index):
-    dashboard = _get_owned_dashboard(dashboard_id)
+    dashboard = get_member_dashboard_or_404(dashboard_id)
     note = db.session.get(Note, note_id)
-    if not note or note.owner_id != current_user.id or note.dashboard_id != dashboard.id:
+    if not _can_manage(note, dashboard):
         if _wants_json():
             return jsonify({"ok": False, "errors": {"form": ["You are not authorized to update this note."]}}), 403
         flash("You are not authorized to update this note.", "error")
@@ -316,9 +318,9 @@ def toggle_todo(dashboard_id, note_id, block_index):
 @notes_bp.route("/<int:note_id>/delete", methods=["GET", "POST"])
 @login_required
 def delete(dashboard_id, note_id):
-    dashboard = _get_owned_dashboard(dashboard_id)
+    dashboard = get_member_dashboard_or_404(dashboard_id)
     note = db.session.get(Note, note_id)
-    if not note or note.owner_id != current_user.id or note.dashboard_id != dashboard.id:
+    if not _can_manage(note, dashboard):
         flash("You are not authorized to delete this note.", "error")
         if _wants_json():
             return jsonify({
