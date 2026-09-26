@@ -10,10 +10,12 @@ from app.helpers.invites import (
     collect_invite_email_errors,
     create_invites,
     normalized_invite_emails,
+    prepare_invite_resend,
+    revoke_invite,
     send_invite_emails,
     submitted_invite_emails,
 )
-from app.models import Dashboard
+from app.models import Dashboard, Invite
 
 invites_bp = Blueprint("invites", __name__, url_prefix="/dashboards/<int:dashboard_id>/invites")
 _INVITE_FORM_ERRORS_KEY = "invite_form_errors"
@@ -85,14 +87,30 @@ def _create_error_response(
     return _redirect_with_form_errors(form_key, errors, values, redirect_url)
 
 
-@invites_bp.route("/create", methods=["GET", "POST"])
-@login_required
-def create(dashboard_id):
+def _owned_dashboard_or_abort(dashboard_id):
     dashboard = db.session.get(Dashboard, dashboard_id)
     if not dashboard or dashboard.owner_id != current_user.id:
         abort(404)
     if dashboard.is_default:
         abort(403)
+    return dashboard
+
+
+def _live_invite_or_404(dashboard, invite_id):
+    invite = db.session.get(Invite, invite_id)
+    if (
+        invite is None
+        or invite.dashboard_id != dashboard.id
+        or invite.deleted_at is not None
+    ):
+        abort(404)
+    return invite
+
+
+@invites_bp.route("/create", methods=["GET", "POST"])
+@login_required
+def create(dashboard_id):
+    dashboard = _owned_dashboard_or_abort(dashboard_id)
 
     settings_url = _settings_url(dashboard)
     if request.method != "POST":
@@ -146,4 +164,65 @@ def create(dashboard_id):
         flash("Those collaborators are already invited.", "info")
     if _wants_json():
         return jsonify({"ok": True, "redirect_url": settings_url})
+    return redirect(settings_url)
+
+
+@invites_bp.route("/<int:invite_id>/revoke", methods=["POST"])
+@login_required
+def revoke(dashboard_id, invite_id):
+    dashboard = _owned_dashboard_or_abort(dashboard_id)
+    invite = _live_invite_or_404(dashboard, invite_id)
+    settings_url = _settings_url(dashboard)
+
+    if not _has_valid_invites_csrf_token():
+        return _create_error_response(
+            {"form": ["Invalid form submission."]},
+            form_key="revoke",
+            redirect_url=settings_url,
+        )
+
+    revoke_invite(invite)
+    try:
+        db.session.commit()
+        session.pop("invites_csrf_token", None)
+    except SQLAlchemyError:
+        db.session.rollback()
+        return _create_error_response(
+            {"form": ["There was an error submitting this request. Please try again."]},
+            form_key="revoke",
+            redirect_url=settings_url,
+        )
+
+    flash("Access revoked.", "success")
+    if _wants_json():
+        return jsonify({"ok": True, "redirect_url": settings_url})
+    return redirect(settings_url)
+
+
+@invites_bp.route("/<int:invite_id>/resend", methods=["POST"])
+@login_required
+def resend(dashboard_id, invite_id):
+    dashboard = _owned_dashboard_or_abort(dashboard_id)
+    invite = _live_invite_or_404(dashboard, invite_id)
+    if invite.status not in ("pending", "rejected"):
+        abort(404)
+    settings_url = _settings_url(dashboard)
+
+    if not _has_valid_invites_csrf_token():
+        flash("Your form has expired. Please try again.", "warning")
+        return redirect(settings_url)
+
+    prepare_invite_resend(invite)
+    try:
+        db.session.commit()
+        session.pop("invites_csrf_token", None)
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("There was an error submitting this request. Please try again.", "warning")
+        return redirect(settings_url)
+
+    if send_invite_emails([invite]):
+        flash(f"We could not email {invite.email}. Please try again.", "warning")
+    else:
+        flash(f"Invitation sent again to {invite.email}.", "success")
     return redirect(settings_url)

@@ -3,7 +3,9 @@ from app.models import Dashboard, Invite
 from unittest.mock import patch
 import smtplib
 
+from app.helpers.dashboard_access import is_dashboard_member
 from app.helpers.invite_tokens import load_invite_token
+from app.helpers.time import utc_now
 from tests.conftest import CSRF_TOKEN, invite_url_token, login, mail_outbox
 
 JSON_HEADERS = {"X-Requested-With": "XMLHttpRequest"}
@@ -300,3 +302,262 @@ def test_settings_page_shows_invite_errors_and_values(client, user, dashboard):
     assert response.status_code == 200
     assert "Enter a valid email address." in html
     assert 'name="invite_emails" value="not-an-email"' in html
+
+
+def revoke_path(dashboard, invite):
+    return f"/dashboards/{dashboard.id}/invites/{invite.id}/revoke"
+
+
+def resend_path(dashboard, invite):
+    return f"/dashboards/{dashboard.id}/invites/{invite.id}/resend"
+
+
+def add_invite(dashboard, email="other@example.com", status="pending", user=None, deleted=False):
+    invite = Invite(
+        dashboard_id=dashboard.id,
+        email=email,
+        user_id=user.id if user else None,
+        status=status,
+        deleted_at=utc_now() if deleted else None,
+    )
+    db.session.add(invite)
+    db.session.commit()
+    return invite
+
+
+def test_revoke_requires_login(client, dashboard):
+    invite = add_invite(dashboard)
+
+    response = client.post(revoke_path(dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+    assert db.session.get(Invite, invite.id).deleted_at is None
+
+
+def test_revoke_returns_404_for_another_users_dashboard(client, user, other_user):
+    other_dashboard = Dashboard(name="Secret", owner_id=other_user.id, is_default=False)
+    db.session.add(other_dashboard)
+    db.session.commit()
+    invite = add_invite(other_dashboard, email="someone@example.com")
+    login_with_invites_token(client, user)
+
+    response = client.post(revoke_path(other_dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 404
+    assert db.session.get(Invite, invite.id).deleted_at is None
+
+
+def test_revoke_returns_403_for_default_dashboard(client, user, default_dashboard):
+    invite = add_invite(default_dashboard)
+    login_with_invites_token(client, user)
+
+    response = client.post(revoke_path(default_dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 403
+
+
+def test_revoke_returns_404_for_invite_on_another_dashboard(client, user, dashboard):
+    other_dashboard = Dashboard(name="Other", owner_id=user.id, is_default=False)
+    db.session.add(other_dashboard)
+    db.session.commit()
+    invite = add_invite(other_dashboard)
+    login_with_invites_token(client, user)
+
+    response = client.post(revoke_path(dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 404
+    assert db.session.get(Invite, invite.id).deleted_at is None
+
+
+def test_revoke_returns_404_for_missing_or_revoked_invite(client, user, dashboard):
+    revoked = add_invite(dashboard, deleted=True)
+    login_with_invites_token(client, user)
+
+    missing = client.post(
+        f"/dashboards/{dashboard.id}/invites/999/revoke", data={"csrf_token": CSRF_TOKEN}
+    )
+    already = client.post(revoke_path(dashboard, revoked), data={"csrf_token": CSRF_TOKEN})
+
+    assert missing.status_code == 404
+    assert already.status_code == 404
+
+
+def test_revoke_rejects_invalid_csrf(client, user, dashboard):
+    invite = add_invite(dashboard)
+    login_with_invites_token(client, user)
+
+    response = client.post(revoke_path(dashboard, invite), data={"csrf_token": "wrong"})
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(settings_path(dashboard))
+    assert db.session.get(Invite, invite.id).deleted_at is None
+    with client.session_transaction() as session:
+        assert session["invite_form_errors"]["revoke"]["form"] == ["Invalid form submission."]
+
+
+def test_revoke_soft_deletes_invite(client, user, dashboard):
+    invite = add_invite(dashboard)
+    login_with_invites_token(client, user)
+
+    response = client.post(revoke_path(dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(settings_path(dashboard))
+    assert db.session.get(Invite, invite.id).deleted_at is not None
+    with client.session_transaction() as session:
+        assert ("success", "Access revoked.") in session.get("_flashes", [])
+
+
+def test_revoke_json(client, user, dashboard):
+    invite = add_invite(dashboard)
+    login_with_invites_token(client, user)
+
+    response = client.post(
+        revoke_path(dashboard, invite),
+        data={"csrf_token": CSRF_TOKEN},
+        headers=JSON_HEADERS,
+    )
+
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["redirect_url"].endswith(settings_path(dashboard))
+
+
+def test_revoked_collaborator_loses_access(client, user, other_user, dashboard):
+    invite = add_invite(dashboard, status="accepted", user=other_user)
+    login_with_invites_token(client, user)
+    assert is_dashboard_member(dashboard, other_user)
+
+    client.post(revoke_path(dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    assert not is_dashboard_member(dashboard, other_user)
+
+
+def test_revoked_invite_disappears_from_settings(client, user, dashboard):
+    add_invite(dashboard, email="gone@example.com", deleted=True)
+    login_with_invites_token(client, user)
+
+    html = client.get(settings_path(dashboard)).get_data(as_text=True)
+
+    assert "gone@example.com" not in html
+
+
+def test_reinvite_after_revoke_revives_invite(app, client, user, other_user, dashboard):
+    invite = add_invite(dashboard, status="accepted", user=other_user, deleted=True)
+    login_with_invites_token(client, user)
+
+    response = client.post(
+        create_invite_path(dashboard),
+        data={"invite_emails": ["other@example.com"], "csrf_token": CSRF_TOKEN},
+    )
+
+    invites = invites_for(dashboard)
+    assert response.status_code == 302
+    assert [i.id for i in invites] == [invite.id]
+    assert invites[0].deleted_at is None
+    assert invites[0].status == "pending"
+    assert len(mail_outbox(app)) == 1
+
+
+def test_resend_requires_login(client, dashboard):
+    invite = add_invite(dashboard, status="rejected")
+
+    response = client.post(resend_path(dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+    assert db.session.get(Invite, invite.id).status == "rejected"
+
+
+def test_resend_returns_404_for_another_users_dashboard(client, user, other_user):
+    other_dashboard = Dashboard(name="Secret", owner_id=other_user.id, is_default=False)
+    db.session.add(other_dashboard)
+    db.session.commit()
+    invite = add_invite(other_dashboard, email="someone@example.com")
+    login_with_invites_token(client, user)
+
+    response = client.post(resend_path(other_dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 404
+
+
+def test_resend_returns_404_for_accepted_invite(app, client, user, other_user, dashboard):
+    invite = add_invite(dashboard, status="accepted", user=other_user)
+    login_with_invites_token(client, user)
+
+    response = client.post(resend_path(dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 404
+    assert mail_outbox(app) == []
+
+
+def test_resend_rejects_invalid_csrf(app, client, user, dashboard):
+    invite = add_invite(dashboard, status="rejected")
+    login_with_invites_token(client, user)
+
+    response = client.post(resend_path(dashboard, invite), data={"csrf_token": "wrong"})
+
+    assert response.status_code == 302
+    assert db.session.get(Invite, invite.id).status == "rejected"
+    assert mail_outbox(app) == []
+
+
+def test_resend_resets_rejected_invite_and_sends_email(app, client, user, other_user, dashboard):
+    invite = add_invite(dashboard, status="rejected")
+    login_with_invites_token(client, user)
+
+    response = client.post(resend_path(dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    refreshed = db.session.get(Invite, invite.id)
+    outbox = mail_outbox(app)
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(settings_path(dashboard))
+    assert refreshed.status == "pending"
+    assert refreshed.user_id == other_user.id
+    assert len(outbox) == 1
+    assert outbox[0].to == ["other@example.com"]
+    assert load_invite_token(invite_url_token(outbox[0])) == {
+        "invite_id": invite.id,
+        "email": "other@example.com",
+    }
+    with client.session_transaction() as session:
+        assert (
+            "success",
+            "Invitation sent again to other@example.com.",
+        ) in session.get("_flashes", [])
+
+
+def test_resend_warns_when_email_fails(client, user, dashboard):
+    invite = add_invite(dashboard)
+    login_with_invites_token(client, user)
+
+    with patch(
+        "app.helpers.invites.EmailMessage.send",
+        side_effect=smtplib.SMTPException("down"),
+    ):
+        client.post(resend_path(dashboard, invite), data={"csrf_token": CSRF_TOKEN})
+
+    with client.session_transaction() as session:
+        assert (
+            "warning",
+            "We could not email other@example.com. Please try again.",
+        ) in session.get("_flashes", [])
+
+
+def test_settings_page_shows_row_actions_by_status(client, user, dashboard):
+    pending = add_invite(dashboard, email="pending@example.com")
+    rejected = add_invite(dashboard, email="rejected@example.com", status="rejected")
+    accepted = add_invite(dashboard, email="accepted@example.com", status="accepted")
+    login_with_invites_token(client, user)
+
+    html = client.get(settings_path(dashboard)).get_data(as_text=True)
+
+    for invite in (pending, rejected, accepted):
+        assert f'data-form-action="{revoke_path(dashboard, invite)}"' in html
+        assert f'aria-label="Revoke access for {invite.email}"' in html
+    assert f'action="{resend_path(dashboard, pending)}"' in html
+    assert f'action="{resend_path(dashboard, rejected)}"' in html
+    assert resend_path(dashboard, accepted) not in html
+    assert 'id="revokeCollaboratorModal"' in html

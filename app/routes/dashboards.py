@@ -216,6 +216,7 @@ def settings(dashboard_id, slug):
         delete_errors=dashboard_errors.get("delete", {}),
         invite_errors=invite_errors.get("create", {}),
         invite_values=invite_values.get("create", {}),
+        revoke_errors=invite_errors.get("revoke", {}),
     )
 
 

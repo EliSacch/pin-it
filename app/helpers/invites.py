@@ -8,6 +8,7 @@ from app.extensions import db
 from app.helpers.email import collect_email_errors
 from app.helpers import invite_tokens
 from app.helpers.invite_tokens import STRICT, generate_invite_token, load_invite_token
+from app.helpers.time import utc_now
 from app.models import Invite, User
 
 
@@ -81,9 +82,29 @@ def create_invites(dashboard, emails):
     ).all()
     user_by_email = {user.email.lower(): user for user in users}
 
+    revoked_by_email = {}
+    if dashboard.id is not None:
+        revoked_by_email = {
+            invite.email.lower(): invite
+            for invite in db.session.scalars(
+                db.select(Invite).where(
+                    Invite.dashboard_id == dashboard.id,
+                    Invite.deleted_at.is_not(None),
+                    func.lower(Invite.email).in_(emails_to_create),
+                )
+            )
+        }
+
     invites = []
     for email in emails_to_create:
         user = user_by_email.get(email)
+        revoked = revoked_by_email.get(email)
+        if revoked is not None:
+            revoked.deleted_at = None
+            revoked.status = "pending"
+            revoked.user_id = user.id if user else None
+            invites.append(revoked)
+            continue
         invite = Invite(
             dashboard=dashboard,
             email=email,
@@ -137,6 +158,18 @@ def accept_invite(invite, user):
 def decline_invite(invite, user):
     invite.status = "rejected"
     invite.user_id = user.id
+
+
+def revoke_invite(invite):
+    invite.deleted_at = utc_now()
+
+
+def prepare_invite_resend(invite):
+    invite.status = "pending"
+    if invite.user_id is None:
+        invite.user_id = db.session.scalar(
+            db.select(User.id).where(func.lower(User.email) == invite.email.lower())
+        )
 
 
 def send_invite_email(invite):

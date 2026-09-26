@@ -4,6 +4,7 @@
 {% from "forms/dashboardNameForm.html" import dashboardNameForm %}
 {% from "forms/inviteForm.html" import inviteForm %}
 {% from "forms/deleteDashboardForm.html" import deleteDashboardForm %}
+{% from "forms/revokeCollaboratorForm.html" import revokeCollaboratorForm %}
 {% block title %}{{ dashboard.name }} settings{% endblock %}
 {% block content %}
 <main id="main-content" class="dashboard-settings-page">
@@ -34,15 +35,43 @@
         </div>
         <div class="info-item">
             <span class="info-item-label" id="collaborators-label">Collaborators:</span>
-            <div class="info-item-value">
+            <div class="info-item-value collaborators-value">
                 <div class="info-item-value dashboard-collaborators">
                     {% if invites %}
                     <ul class="invite-list" aria-labelledby="collaborators-label">
                         {% for invite in invites %}
                         <li class="invite-list-item">
-                            <span class="invite-email">{{ invite.email }}</span>
-                            <span class="invite-status invite-status-{{ invite.status }}">{{ invite.status|capitalize
-                                }}</span>
+                            <span class="invite-summary">
+                                <span class="invite-email">{{ invite.email }}</span>
+                                <span class="invite-status invite-status-{{ invite.status }}">{{ invite.status|capitalize
+                                    }}</span>
+                            </span>
+                            <div class="invite-actions">
+                                {% set revokeButton %}
+                                <button type="button" class="base-button link invite-action-btn modal-trigger"
+                                        data-modal="revokeCollaboratorModal"
+                                        data-form-action="{{ url_for('invites.revoke', dashboard_id=dashboard.id, invite_id=invite.id) }}"
+                                        aria-haspopup="dialog"
+                                        aria-controls="revokeCollaboratorModal"
+                                        aria-label="Revoke access for {{ invite.email }}">
+                                    <i class="fa-solid fa-user-minus" aria-hidden="true"></i>
+                                </button>
+                                {% endset %}
+                                {{ tooltip(revokeButton, 'Revoke access', 'bottom') }}
+                                {% if invite.status in ("pending", "rejected") %}
+                                <form method="post"
+                                      action="{{ url_for('invites.resend', dashboard_id=dashboard.id, invite_id=invite.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ invites_csrf_token }}">
+                                    {% set resendButton %}
+                                    <button type="submit" class="base-button link invite-action-btn"
+                                            aria-label="Resend invitation to {{ invite.email }}">
+                                        <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                                    </button>
+                                    {% endset %}
+                                    {{ tooltip(resendButton, 'Resend invitation', 'bottom') }}
+                                </form>
+                                {% endif %}
+                            </div>
                         </li>
                         {% endfor %}
                     </ul>
@@ -75,6 +104,8 @@ errors=invite_errors,
 values=invite_values,
 form_id='add-collaborators-form') %}
 {{ modal('addCollaboratorsModal', 'Add collaborators', inviteFormHtml, confirm_action='submit-form') }}
+{% set revokeFormHtml = revokeCollaboratorForm(invites_csrf_token, errors=revoke_errors) %}
+{{ modal('revokeCollaboratorModal', 'Revoke access', revokeFormHtml, confirm_action='submit-form') }}
 {% set deleteDashboardFormHtml = deleteDashboardForm(dashboards_csrf_token,
 errors=delete_errors,
 action=url_for('dashboards.delete', dashboard_id=dashboard.id)) %}

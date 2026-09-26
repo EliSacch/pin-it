@@ -1,0 +1,19 @@
+{% macro revokeCollaboratorForm(csrf_token, errors={}, action="") %}
+    {% set field_errors = errors if errors is mapping else {"form": errors} %}
+    <form id="revokeCollaboratorForm" action="{{ action }}" method="post">
+        <div class="form-errors error-msg"
+             role="alert"
+             {% if not field_errors.get('form') %} hidden{% endif %}>
+            {% if field_errors.get('form') %}
+                <ul>
+                    {% for error in field_errors.form %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+        <p class="modal-prompt">Are you sure you want to revoke access for this collaborator?</p>
+        <small>They will no longer be able to open this dashboard.</small>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    </form>
+{% endmacro %}
