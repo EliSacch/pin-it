@@ -1308,22 +1308,25 @@
 
   // static/scripts/profile-inline.js
   var $8 = window.jQuery;
+  var editButtonSelector = ".profile-inline-edit-btn, [data-inline-editor-trigger]";
+  var editPanelSelector = ".profile-inline-edit, [data-inline-editor-panel]";
+  var viewSelector = ".profile-inline-view, [data-inline-editor-view]";
   function closeProfileInlineEditor($item) {
     const $form = $item.find("form");
     $form.trigger("reset");
     $form.find(".error-msg").prop("hidden", true).find("ul").empty();
     $form.find("[aria-invalid]").removeAttr("aria-invalid aria-describedby");
-    $item.find(".profile-inline-edit").addClass("hidden-form");
-    $item.find(".profile-inline-view").removeClass("hidden-form");
-    $item.find(".profile-inline-edit-btn").attr("aria-expanded", "false").first().trigger("focus");
+    $item.find(editPanelSelector).addClass("hidden-form");
+    $item.find(viewSelector).removeClass("hidden-form");
+    $item.find(editButtonSelector).attr("aria-expanded", "false").first().trigger("focus");
   }
   $8(function() {
-    $8(document).on("click", ".profile-inline-edit-btn", function() {
+    $8(document).on("click", editButtonSelector, function() {
       const $item = $8(this).closest("[data-inline-editor]");
-      $item.find(".profile-inline-view").addClass("hidden-form");
-      $item.find(".profile-inline-edit").removeClass("hidden-form");
+      $item.find(viewSelector).addClass("hidden-form");
+      $item.find(editPanelSelector).removeClass("hidden-form");
       $8(this).attr("aria-expanded", "true");
-      $item.find('.profile-inline-edit input:not([type="hidden"])').first().trigger("focus");
+      $item.find(editPanelSelector).find('input:not([type="hidden"])').first().trigger("focus");
     });
     $8(document).on("click", "[data-inline-editor] .cancel-btn", function() {
       closeProfileInlineEditor($8(this).closest("[data-inline-editor]"));
@@ -1333,10 +1336,10 @@
         return;
       }
       const $item = $8(this);
-      if (!$item.find(".profile-inline-edit").hasClass("hidden-form")) {
+      if (!$item.find(editPanelSelector).hasClass("hidden-form")) {
         closeProfileInlineEditor($item);
       }
     });
-    $8('[data-inline-editor] .profile-inline-edit:not(.hidden-form) input[aria-invalid="true"]').first().trigger("focus");
+    $8("[data-inline-editor]").find(editPanelSelector).filter(":not(.hidden-form)").find('input[aria-invalid="true"]').first().trigger("focus");
   });
 })();

@@ -1,0 +1,29 @@
+{% from "forms/inputs/inlineEditTextInput.html" import inline_edit_text_input %}
+{% macro dashboardNameForm(action, csrf_token, errors={}, values={}, form_id=None) %}
+    {% set field_errors = errors if errors is mapping else {"name": errors} %}
+    <form {% if form_id %}id="{{ form_id }}" {% endif %}class="dashboard-name-form"
+          action="{{ action }}"
+          method="post"
+          novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {{ inline_edit_text_input(name="name",
+            label="Dashboard name",
+            value=values.name if values else '',
+            type="text",
+            errors=field_errors.get('name', []),
+            field_id=(form_id ~ '-name') if form_id else 'name',
+            save_aria_label='Save dashboard name',
+            loading_text='Saving dashboard name...') }}
+    </form>
+    <div class="form-errors error-msg"
+         role="alert"
+         {% if not field_errors.get('form') %} hidden{% endif %}>
+        {% if field_errors.get('form') %}
+            <ul>
+                {% for error in field_errors.form %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+{% endmacro %}

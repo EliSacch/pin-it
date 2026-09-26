@@ -1,0 +1,29 @@
+{% from "forms/inputs/listInput.html" import list_input %}
+{% macro inviteForm(action, csrf_token, errors={}, values={}, form_id=None) %}
+    {% set field_errors = errors if errors is mapping else {"invite_emails": errors} %}
+    <form {% if form_id %}id="{{ form_id }}" {% endif %}class="invite-form"
+          action="{{ action }}"
+          method="post"
+          novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {{ list_input(name="invite_emails",
+            label="Collaborator emails",
+            values=(values.invite_emails if values else none) or [],
+            item_type="email",
+            item_label="email",
+            errors=field_errors.get('invite_emails', []),
+            field_id=(form_id ~ '-invite-emails') if form_id else 'invite-emails',
+            hint="Separate email addresses with commas or spaces.") }}
+        <div class="form-errors error-msg"
+             role="alert"
+             {% if not field_errors.get('form') %} hidden{% endif %}>
+            {% if field_errors.get('form') %}
+                <ul>
+                    {% for error in field_errors.form %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </form>
+{% endmacro %}

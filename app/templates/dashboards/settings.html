@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "macros/tooltip.html" import tooltip %}
+{% from "macros/modal.html" import modal %}
+{% from "forms/dashboardNameForm.html" import dashboardNameForm %}
+{% from "forms/inviteForm.html" import inviteForm %}
+{% from "forms/deleteDashboardForm.html" import deleteDashboardForm %}
+{% block title %}{{ dashboard.name }} settings{% endblock %}
+{% block content %}
+<main id="main-content" class="dashboard-settings-page">
+    <section class="dashboard-info" aria-labelledby="dashboard-settings-title">
+        <h2 id="dashboard-settings-title">Dashboard settings</h2>
+        <div class="info-item" data-inline-editor>
+            <span class="info-item-label">Name:</span>
+            <div class="info-item-value{% if name_errors %} hidden-form{% endif %}"
+                 data-inline-editor-view>
+                <span class="info-item-value">
+                    {{ dashboard.name }}
+                    {{ tooltip('<button type="button" class="base-button link info-item-edit-btn"
+                        data-inline-editor-trigger
+                        aria-label="Edit dashboard name" aria-expanded="' ~ ('true' if name_errors else 'false') ~ '"
+                        aria-controls="update-dashboard-name-form">
+                        <i class="fa-solid fa-pencil" aria-hidden="true"></i>
+                    </button>', 'Edit name', 'right') }}
+                </span>
+            </div>
+            <div class="info-item-edit{% if not name_errors %} hidden-form{% endif %}"
+                 data-inline-editor-panel>
+                {{ dashboardNameForm(url_for('dashboards.update', dashboard_id=dashboard.id),
+                dashboards_csrf_token,
+                errors=name_errors,
+                values=name_values,
+                form_id='update-dashboard-name-form') }}
+            </div>
+        </div>
+        <div class="info-item">
+            <span class="info-item-label" id="collaborators-label">Collaborators:</span>
+            <div class="info-item-value">
+                <div class="info-item-value dashboard-collaborators">
+                    {% if invites %}
+                    <ul class="invite-list" aria-labelledby="collaborators-label">
+                        {% for invite in invites %}
+                        <li class="invite-list-item">
+                            <span class="invite-email">{{ invite.email }}</span>
+                            <span class="invite-status invite-status-{{ invite.status }}">{{ invite.status|capitalize
+                                }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="invite-list-empty">No collaborators yet.</p>
+                    {% endif %}
+                </div>
+                {{ tooltip('<button type="button" class="base-button link info-item-edit-btn modal-trigger"
+                    data-modal="addCollaboratorsModal"
+                    aria-label="Add collaborators"
+                    aria-haspopup="dialog"
+                    aria-controls="addCollaboratorsModal">
+                    <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+                </button>', 'Add collaborators', 'right') }}
+            </div>
+        </div>
+    </section>
+    <section class="dashboard-settings-actions">
+        <button type="button"
+                class="base-button primary modal-trigger"
+                data-modal="deleteDashboardModal"
+                data-form-action="{{ url_for('dashboards.delete', dashboard_id=dashboard.id) }}"
+                aria-haspopup="dialog"
+                aria-controls="deleteDashboardModal">Delete dashboard</button>
+    </section>
+</main>
+{% set inviteFormHtml = inviteForm(url_for('invites.create', dashboard_id=dashboard.id),
+invites_csrf_token,
+errors=invite_errors,
+values=invite_values,
+form_id='add-collaborators-form') %}
+{{ modal('addCollaboratorsModal', 'Add collaborators', inviteFormHtml, confirm_action='submit-form') }}
+{% set deleteDashboardFormHtml = deleteDashboardForm(dashboards_csrf_token,
+errors=delete_errors,
+action=url_for('dashboards.delete', dashboard_id=dashboard.id)) %}
+{{ modal('deleteDashboardModal', 'Delete dashboard', deleteDashboardFormHtml, confirm_action='submit-form') }}
+{% endblock %}

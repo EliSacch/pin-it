@@ -13,6 +13,10 @@ def update_path(dashboard):
     return f"/dashboards/{dashboard.id}/update"
 
 
+def settings_path(dashboard):
+    return f"/dashboards/{dashboard.id}/{dashboard.slug}/settings"
+
+
 def invites_for(dashboard):
     return db.session.scalars(
         db.select(Invite).where(Invite.dashboard_id == dashboard.id)
@@ -156,18 +160,83 @@ def test_create_error_redirect_preserves_invite_emails_in_form(client, user):
     assert db.session.scalar(db.select(Dashboard).where(Dashboard.name == "Shared")) is None
 
 
-def test_dashboard_form_renders_empty_collaborator_list(client, user, dashboard):
+def test_dashboard_page_links_edit_to_settings(client, user, dashboard):
     login(client, user)
 
     response = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}")
 
     html = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert 'id="editDashboardForm-invite-emails"' in html
-    assert 'data-item-type="email"' in html
+    assert f'href="{settings_path(dashboard)}"' in html
+    assert "editDashboardModal" not in html
     assert html.count('type="hidden" name="invite_emails"') == html.count(
         'class="list-input-chip-template"'
     )
+
+
+def test_settings_requires_login(client, dashboard):
+    response = client.get(settings_path(dashboard))
+
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+
+
+def test_settings_returns_404_for_another_users_dashboard(client, user, other_user):
+    other_dashboard = Dashboard(name="Secret", owner_id=other_user.id, is_default=False)
+    db.session.add(other_dashboard)
+    db.session.commit()
+    login(client, user)
+
+    response = client.get(settings_path(other_dashboard))
+
+    assert response.status_code == 404
+
+
+def test_settings_returns_403_for_default_dashboard(client, user, default_dashboard):
+    login(client, user)
+
+    response = client.get(settings_path(default_dashboard))
+
+    assert response.status_code == 403
+
+
+def test_settings_redirects_stale_slug(client, user, dashboard):
+    login(client, user)
+
+    response = client.get(f"/dashboards/{dashboard.id}/old-name/settings")
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(settings_path(dashboard))
+
+
+def test_settings_renders_name_and_invites(client, user, other_user, dashboard):
+    db.session.add_all([
+        Invite(dashboard_id=dashboard.id, email="other@example.com",
+               user_id=other_user.id, status="accepted"),
+        Invite(dashboard_id=dashboard.id, email="new@example.com", status="pending"),
+    ])
+    db.session.commit()
+    login(client, user)
+
+    response = client.get(settings_path(dashboard))
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'value="Work"' in html
+    assert "other@example.com" in html
+    assert "Accepted" in html
+    assert "new@example.com" in html
+    assert "Pending" in html
+    assert f'action="/dashboards/{dashboard.id}/invites/create"' in html
+    assert 'aria-label="Back to dashboard"' in html
+
+
+def test_settings_renders_empty_collaborators(client, user, dashboard):
+    login(client, user)
+
+    response = client.get(settings_path(dashboard))
+
+    assert "No collaborators yet." in response.get_data(as_text=True)
 
 
 def test_update_requires_login(client, dashboard):
@@ -181,13 +250,13 @@ def test_update_requires_login(client, dashboard):
     assert db.session.get(Dashboard, dashboard.id).name == "Work"
 
 
-def test_update_get_redirects_to_dashboard(client, user, dashboard):
+def test_update_get_redirects_to_settings(client, user, dashboard):
     login(client, user)
 
     response = client.get(update_path(dashboard))
 
     assert response.status_code == 302
-    assert response.headers["Location"].endswith(f"/dashboards/{dashboard.id}/work")
+    assert response.headers["Location"].endswith(settings_path(dashboard))
 
 
 def test_update_returns_404_for_missing_dashboard(client, user):
@@ -331,7 +400,7 @@ def test_update_renames_dashboard_and_redirects(client, user, dashboard):
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith(
-        f"/dashboards/{dashboard.id}/my-board"
+        f"/dashboards/{dashboard.id}/my-board/settings"
     )
     updated = db.session.get(Dashboard, dashboard.id)
     assert updated.name == "My Board"
@@ -353,11 +422,27 @@ def test_update_renames_dashboard_json(client, user, dashboard):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["ok"] is True
-    assert payload["redirect_url"].endswith(f"/dashboards/{dashboard.id}/ideas")
+    assert payload["redirect_url"].endswith(f"/dashboards/{dashboard.id}/ideas/settings")
     assert db.session.get(Dashboard, dashboard.id).name == "Ideas"
 
 
-def test_update_adds_invite_emails(client, user, other_user, dashboard):
+def test_update_errors_render_on_settings_page(client, user, dashboard):
+    login(client, user)
+
+    response = client.post(
+        update_path(dashboard),
+        data={"name": "   ", "csrf_token": CSRF_TOKEN},
+        follow_redirects=True,
+    )
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Name is required." in html
+    assert 'id="update-dashboard-name-form-name"' in html
+    assert db.session.get(Dashboard, dashboard.id).name == "Work"
+
+
+def test_update_ignores_invite_emails(client, user, dashboard):
     login(client, user)
 
     response = client.post(
@@ -365,73 +450,9 @@ def test_update_adds_invite_emails(client, user, other_user, dashboard):
         data={
             "name": "Work",
             "csrf_token": CSRF_TOKEN,
-            "invite_emails": ["other@example.com", "new@example.com"],
+            "invite_emails": ["new@example.com"],
         },
-        headers=JSON_HEADERS,
     )
 
-    payload = response.get_json()
-    invites = invites_for(dashboard)
-    invites_by_email = {invite.email: invite for invite in invites}
-
-    assert response.status_code == 200
-    assert payload["ok"] is True
-    assert set(invites_by_email) == {"other@example.com", "new@example.com"}
-    assert invites_by_email["other@example.com"].user_id == other_user.id
-    assert invites_by_email["new@example.com"].user_id is None
-
-
-def test_update_skips_existing_invite_emails(client, user, other_user, dashboard):
-    existing = Invite(
-        dashboard_id=dashboard.id,
-        email="other@example.com",
-        user_id=other_user.id,
-        status="pending",
-    )
-    db.session.add(existing)
-    db.session.commit()
-    login(client, user)
-
-    response = client.post(
-        update_path(dashboard),
-        data={
-            "name": "Renamed",
-            "csrf_token": CSRF_TOKEN,
-            "invite_emails": ["other@example.com", "fresh@example.com"],
-        },
-        headers=JSON_HEADERS,
-    )
-
-    invites = invites_for(dashboard)
-    assert response.status_code == 200
-    assert db.session.get(Dashboard, dashboard.id).name == "Renamed"
-    assert {invite.email for invite in invites} == {
-        "other@example.com",
-        "fresh@example.com",
-    }
-    assert {invite.id for invite in invites if invite.email == "other@example.com"} == {
-        existing.id
-    }
-
-
-def test_update_rejects_invalid_invite_email_and_does_not_rename(
-    client, user, dashboard
-):
-    login(client, user)
-
-    response = client.post(
-        update_path(dashboard),
-        data={
-            "name": "Renamed",
-            "csrf_token": CSRF_TOKEN,
-            "invite_emails": ["not-an-email"],
-        },
-        headers=JSON_HEADERS,
-    )
-
-    payload = response.get_json()
-    assert response.status_code == 400
-    assert payload["errors"]["invite_emails"] == ["Enter a valid email address."]
-    assert db.session.get(Dashboard, dashboard.id).name == "Work"
+    assert response.status_code == 302
     assert invites_for(dashboard) == []
-

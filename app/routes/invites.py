@@ -1,10 +1,17 @@
 import hmac
 import secrets
 
-from flask import Blueprint, abort, jsonify, redirect, request, session, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, request, session, url_for
 from flask_login import login_required, current_user
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
+from app.helpers.invites import (
+    collect_invite_email_errors,
+    create_invites,
+    normalized_invite_emails,
+    submitted_invite_emails,
+)
 from app.models import Dashboard
 
 invites_bp = Blueprint("invites", __name__, url_prefix="/dashboards/<int:dashboard_id>/invites")
@@ -38,9 +45,9 @@ def _wants_json():
     )
 
 
-def _dashboard_url(dashboard):
+def _settings_url(dashboard):
     return url_for(
-        "dashboards.get",
+        "dashboards.settings",
         dashboard_id=dashboard.id,
         slug=dashboard.slug,
     )
@@ -48,7 +55,7 @@ def _dashboard_url(dashboard):
 
 def _submitted_invite_values():
     return {
-        "email": request.form.get("email", ""),
+        "invite_emails": submitted_invite_emails(request.form),
     }
 
 
@@ -86,23 +93,48 @@ def create(dashboard_id):
     if dashboard.is_default:
         abort(403)
 
-    error_redirect = _dashboard_url(dashboard)
+    settings_url = _settings_url(dashboard)
     if request.method != "POST":
-        return redirect(error_redirect)
+        return redirect(settings_url)
 
     errors = {}
     values = _submitted_invite_values()
-    email = values.get("email", "").strip()
+    emails = normalized_invite_emails(values["invite_emails"])
 
     if not _has_valid_invites_csrf_token():
         errors.setdefault("form", []).append("Invalid form submission.")
-    if not email:
-        errors.setdefault("email", []).append("Email is required.")
+    if not emails:
+        errors.setdefault("invite_emails", []).append("Add at least one email address.")
+    else:
+        email_errors = collect_invite_email_errors(
+            values["invite_emails"],
+            owner_email=current_user.email,
+        )
+        if email_errors:
+            errors.setdefault("invite_emails", []).extend(email_errors)
     if errors:
         return _create_error_response(
             errors,
             values,
-            redirect_url=error_redirect,
+            redirect_url=settings_url,
         )
 
-    return redirect(error_redirect)
+    created = create_invites(dashboard, emails)
+    try:
+        db.session.commit()
+        session.pop("invites_csrf_token", None)
+    except SQLAlchemyError:
+        db.session.rollback()
+        return _create_error_response(
+            {"form": ["There was an error submitting this request. Please try again."]},
+            values,
+            redirect_url=settings_url,
+        )
+
+    if created:
+        flash("Collaborators added.", "success")
+    else:
+        flash("Those collaborators are already invited.", "info")
+    if _wants_json():
+        return jsonify({"ok": True, "redirect_url": settings_url})
+    return redirect(settings_url)

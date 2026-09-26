@@ -1,6 +1,6 @@
-{% macro deleteDashboardForm(csrf_token, errors={}) %}
+{% macro deleteDashboardForm(csrf_token, errors={}, action="") %}
     {% set field_errors = errors if errors is mapping else {"form": errors} %}
-    <form id="deleteDashboardForm" action="" method="post">
+    <form id="deleteDashboardForm" action="{{ action }}" method="post">
         <div class="form-errors error-msg"
              role="alert"
              {% if not field_errors.get('form') %} hidden{% endif %}>

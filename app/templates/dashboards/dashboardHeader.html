@@ -5,20 +5,19 @@
     </div>
     <div class="dashboard-header-actions">
         {% if dashboard.is_default != True %}
-            {{ tooltip('<button type="button"
-                class="base-button link-light modal-trigger"
-                data-modal="editDashboardModal"
-                data-form-action="' ~ url_for('dashboards.update', dashboard_id=dashboard.id) ~ '"
-                aria-label="Edit dashboard">
-                <i class="fa-solid fa-pencil" aria-hidden="true"></i>
-                </button>', 'Edit', 'right', 'light') }}
-        {{ tooltip('<button type="button"
-            class="base-button link-light modal-trigger"
-            data-modal="deleteDashboardModal"
-            data-form-action="' ~ url_for('dashboards.delete', dashboard_id=dashboard.id) ~ '"
-            aria-label="Delete dashboard">
-            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
-            </button>', 'Delete', 'right', 'light') }}
-{% endif %}
+            {% if request.endpoint == 'dashboards.settings' %}
+                {{ tooltip('<a href="' ~ url_for('dashboards.get', dashboard_id=dashboard.id, slug=dashboard.slug) ~ '"
+                    class="base-button link-light"
+                    aria-label="Back to dashboard">
+                    <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                    </a>', 'Back to dashboard', 'right', 'light') }}
+            {% else %}
+                {{ tooltip('<a href="' ~ url_for('dashboards.settings', dashboard_id=dashboard.id, slug=dashboard.slug) ~ '"
+                    class="base-button link-light"
+                    aria-label="Dashboard settings">
+                    <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                    </a>', 'Dashboard settings', 'right', 'light') }}
+            {% endif %}
+        {% endif %}
     </div>
 {% endmacro %}

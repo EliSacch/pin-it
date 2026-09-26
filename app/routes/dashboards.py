@@ -12,7 +12,7 @@ from app.helpers.invites import (
     normalized_invite_emails,
     submitted_invite_emails,
 )
-from app.models import Dashboard, Note
+from app.models import Dashboard, Invite, Note
 
 dashboards_bp = Blueprint("dashboards", __name__, url_prefix="/dashboards")
 _DASHBOARD_FORM_ERRORS_KEY = "dashboard_form_errors"
@@ -50,6 +50,22 @@ def _dashboard_url(dashboard):
         "dashboards.get",
         dashboard_id=dashboard.id,
         slug=dashboard.slug,
+    )
+
+
+def _settings_url(dashboard):
+    return url_for(
+        "dashboards.settings",
+        dashboard_id=dashboard.id,
+        slug=dashboard.slug,
+    )
+
+
+def _owned_dashboards():
+    return db.session.scalars(
+        db.select(Dashboard)
+        .where(Dashboard.owner_id == current_user.id)
+        .order_by(Dashboard.created_at.asc())
     )
 
 
@@ -106,14 +122,7 @@ def dashboard_view_context(dashboard):
         _notes_csrf_token,
     )
 
-    dashboards = [
-        item.to_dict()
-        for item in db.session.scalars(
-            db.select(Dashboard)
-            .where(Dashboard.owner_id == current_user.id)
-            .order_by(Dashboard.created_at.asc())
-        )
-    ]
+    dashboards = [item.to_dict() for item in _owned_dashboards()]
 
     if dashboard is None:
         notes = []
@@ -165,15 +174,53 @@ def get(dashboard_id, slug):
     return render_template("index.html", **dashboard_view_context(dashboard))
 
 
+@dashboards_bp.route("/<int:dashboard_id>/<slug>/settings")
+@login_required
+def settings(dashboard_id, slug):
+    from app.routes.invites import (
+        _INVITE_FORM_ERRORS_KEY,
+        _INVITE_FORM_VALUES_KEY,
+        _invites_csrf_token,
+    )
+
+    dashboard = db.session.get(Dashboard, dashboard_id)
+    if not dashboard or dashboard.owner_id != current_user.id:
+        abort(404)
+    if dashboard.is_default:
+        abort(403)
+    if dashboard.slug != slug:
+        return redirect(_settings_url(dashboard))
+
+    invites = db.session.scalars(
+        db.select(Invite)
+        .where(Invite.dashboard_id == dashboard.id, Invite.deleted_at.is_(None))
+        .order_by(Invite.created_at.asc())
+    ).all()
+
+    dashboard_errors = session.pop(_DASHBOARD_FORM_ERRORS_KEY, {})
+    dashboard_values = session.pop(_DASHBOARD_FORM_VALUES_KEY, {})
+    invite_errors = session.pop(_INVITE_FORM_ERRORS_KEY, {})
+    invite_values = session.pop(_INVITE_FORM_VALUES_KEY, {})
+
+    return render_template(
+        "dashboards/settings.html",
+        dashboard=dashboard.to_dict(),
+        dashboards=[item.to_dict() for item in _owned_dashboards()],
+        invites=invites,
+        dashboards_csrf_token=_dashboards_csrf_token(),
+        invites_csrf_token=_invites_csrf_token(),
+        name_errors=dashboard_errors.get("update", {}),
+        name_values=dashboard_values.get("update") or {"name": dashboard.name},
+        delete_errors=dashboard_errors.get("delete", {}),
+        invite_errors=invite_errors.get("create", {}),
+        invite_values=invite_values.get("create", {}),
+    )
+
+
 @dashboards_bp.route("/list")
 @login_required
 def list():
-    dashboards = db.session.scalars(
-        db.select(Dashboard)
-        .where(Dashboard.owner_id == current_user.id)
-        .order_by(Dashboard.created_at.asc())
-    )
-    return jsonify([dashboard.to_dict() for dashboard in dashboards])
+    return jsonify([dashboard.to_dict() for dashboard in _owned_dashboards()])
 
 
 @dashboards_bp.route("/create", methods=["GET", "POST"])
@@ -235,29 +282,30 @@ def update(dashboard_id):
     dashboard = db.session.get(Dashboard, dashboard_id)
     if not dashboard or dashboard.owner_id != current_user.id:
         abort(404)
-    if request.method != "POST":
-        return redirect(_dashboard_url(dashboard))
-
-    errors = {}
-    values = _submitted_dashboard_values()
-    name = values.get("name", "").strip()
-    error_redirect = _dashboard_url(dashboard)
-
     if dashboard.is_default:
+        if request.method != "POST":
+            return redirect(_dashboard_url(dashboard))
         return _create_error_response(
             {"form": ["You cannot rename the default dashboard."]},
-            values,
+            {"name": request.form.get("name", "")},
             form_key="update",
             retryable=False,
-            redirect_url=error_redirect,
+            redirect_url=_dashboard_url(dashboard),
         )
+    error_redirect = _settings_url(dashboard)
+    if request.method != "POST":
+        return redirect(error_redirect)
+
+    errors = {}
+    values = {"name": request.form.get("name", "")}
+    name = values["name"].strip()
+
     if not _has_valid_dashboards_csrf_token():
         errors.setdefault("form", []).append("Invalid form submission.")
     if not name:
         errors.setdefault("name", []).append("Name is required.")
     elif len(name) > 50:
         errors.setdefault("name", []).append("Name must be less than 50 characters.")
-    invite_emails = _apply_invite_email_errors(errors, values)
     if errors:
         return _create_error_response(
             errors,
@@ -267,7 +315,6 @@ def update(dashboard_id):
         )
 
     dashboard.name = name
-    create_invites(dashboard, invite_emails)
     try:
         db.session.commit()
         session.pop("dashboards_csrf_token", None)
@@ -289,7 +336,7 @@ def update(dashboard_id):
         )
 
     flash("Dashboard updated successfully.", "success")
-    redirect_url = _dashboard_url(dashboard)
+    redirect_url = _settings_url(dashboard)
     if _wants_json():
         return jsonify({"ok": True, "redirect_url": redirect_url})
     return redirect(redirect_url)
@@ -310,7 +357,7 @@ def delete(dashboard_id):
         return redirect(url_for("main.index"))
     if not _has_valid_dashboards_csrf_token():
         errors.setdefault("form", []).append("Invalid form submission.")
-        return _create_error_response(errors, form_key="delete")
+        return _create_error_response(errors, form_key="delete", redirect_url=_settings_url(dashboard))
 
     db.session.delete(dashboard)
     try:
@@ -319,7 +366,7 @@ def delete(dashboard_id):
     except SQLAlchemyError:
         db.session.rollback()
         errors.setdefault("form", []).append("There was an error submitting this request. Please try again.")
-        return _create_error_response(errors, form_key="delete")
+        return _create_error_response(errors, form_key="delete", redirect_url=_settings_url(dashboard))
 
     redirect_url = url_for("main.index")
     if _wants_json():
