@@ -9,6 +9,7 @@ import {
     setButtonLoading,
     showFormErrors,
 } from './ui-common.js';
+import { commitListInputs } from './list-input.js';
 import { navigateWithTransition } from './page-transitions.js';
 
 const $ = window.jQuery;
@@ -122,6 +123,7 @@ async function submitModalForm($modal, $confirmBtn) {
     }
 
     const form = $form.get(0);
+    commitListInputs($form);
     if (typeof form.reportValidity === 'function' && !form.reportValidity()) {
         return;
     }

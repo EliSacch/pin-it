@@ -85,6 +85,68 @@
     border-bottom: 1px solid var(--clr-error);
 }
 
+/* --------------------------- List input */
+
+.list-input-hint {
+    margin-top: var(--spacing-m);
+    font-size: 0.8em;
+    color: var(--clr-grey);
+}
+
+.list-input-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-m);
+    margin-top: var(--spacing-m);
+}
+
+.list-input-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-m);
+    max-width: 100%;
+    padding: 2px 2px 2px var(--padding-m);
+    border: 1px solid var(--clr-dark);
+    border-radius: var(--border-radius);
+    font-size: 0.9em;
+}
+
+.list-input-chip-label {
+    overflow-wrap: anywhere;
+}
+
+.list-input-chip.is-invalid {
+    border-style: dashed;
+    border-color: var(--clr-error);
+    color: var(--clr-error);
+}
+
+.list-input-chip.is-invalid .list-input-chip-label {
+    text-decoration: underline wavy var(--clr-error);
+}
+
+.list-input-chip-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+    border: none;
+    border-radius: var(--border-radius);
+    background-color: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.list-input-chip-remove:hover {
+    color: var(--clr-error);
+}
+
+.list-input-chip-remove:focus-visible {
+    outline: var(--tab-outline);
+    outline-offset: 2px;
+}
+
 /* --------------------------- Note forms */
 
 .hidden-form {

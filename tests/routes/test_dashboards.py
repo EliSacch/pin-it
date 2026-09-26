@@ -134,6 +134,42 @@ def test_create_rejects_duplicate_invite_emails(client, user):
     assert db.session.scalar(db.select(Dashboard).where(Dashboard.name == "Dupes")) is None
 
 
+def test_create_error_redirect_preserves_invite_emails_in_form(client, user):
+    login(client, user)
+
+    response = client.post(
+        create_path(),
+        data={
+            "name": "Shared",
+            "csrf_token": CSRF_TOKEN,
+            "invite_emails": ["friend@example.com", "not-an-email"],
+        },
+        follow_redirects=True,
+    )
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'name="invite_emails" value="friend@example.com"' in html
+    assert 'name="invite_emails" value="not-an-email"' in html
+    assert "Enter a valid email address." in html
+    assert 'id="addDashboardForm-invite-emails"' in html
+    assert db.session.scalar(db.select(Dashboard).where(Dashboard.name == "Shared")) is None
+
+
+def test_dashboard_form_renders_empty_collaborator_list(client, user, dashboard):
+    login(client, user)
+
+    response = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}")
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'id="editDashboardForm-invite-emails"' in html
+    assert 'data-item-type="email"' in html
+    assert html.count('type="hidden" name="invite_emails"') == html.count(
+        'class="list-input-chip-template"'
+    )
+
+
 def test_update_requires_login(client, dashboard):
     response = client.post(
         update_path(dashboard),
