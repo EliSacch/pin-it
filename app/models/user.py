@@ -14,9 +14,15 @@ class User(UserMixin, db.Model):
         db.Boolean, default=False, server_default=db.false(), nullable=False
     )
     password_hash = db.Column(db.String(255), nullable=False)
-    notes = db.relationship("Note", back_populates="owner", cascade="all, delete-orphan")
-    dashboards = db.relationship("Dashboard", back_populates="owner", cascade="all, delete-orphan")
-    invites = db.relationship("Invite", back_populates="user", cascade="all, delete-orphan")
+    # Notes on others' dashboards must be marked with owner_deleted_at before the
+    # user is deleted; "all" stops the ORM from nulling owner_id on its own.
+    notes = db.relationship("Note", back_populates="owner", passive_deletes="all")
+    dashboards = db.relationship(
+        "Dashboard", back_populates="owner", cascade="all, delete-orphan", passive_deletes=True
+    )
+    invites = db.relationship(
+        "Invite", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
     created_at = db.Column(UTCDateTime, default=utc_now)
     updated_at = db.Column(
         UTCDateTime,

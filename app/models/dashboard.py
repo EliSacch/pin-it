@@ -12,11 +12,17 @@ class Dashboard(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(50), nullable=False)
-    owner_id = db.Column(db.Integer, db.ForeignKey("Users.id"), nullable=False, index=True)
+    owner_id = db.Column(
+        db.Integer, db.ForeignKey("Users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     is_default = db.Column(db.Boolean, nullable=False, default=False)
-    notes = db.relationship("Note", back_populates="dashboard", cascade="all, delete-orphan")
+    notes = db.relationship(
+        "Note", back_populates="dashboard", cascade="all, delete-orphan", passive_deletes=True
+    )
     owner = db.relationship("User", back_populates="dashboards")
-    invites = db.relationship("Invite", back_populates="dashboard", cascade="all, delete-orphan")
+    invites = db.relationship(
+        "Invite", back_populates="dashboard", cascade="all, delete-orphan", passive_deletes=True
+    )
     created_at = db.Column(UTCDateTime, default=utc_now, index=True)
     updated_at = db.Column(UTCDateTime, default=utc_now, onupdate=utc_now)
 

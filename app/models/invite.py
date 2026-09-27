@@ -17,9 +17,13 @@ class Invite(db.Model):
         default="pending",
     )
     email = db.Column(db.String(100), nullable=False, index=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("Users.id"), nullable=True, index=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("Users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     user = db.relationship("User", back_populates="invites")
-    dashboard_id = db.Column(db.Integer, db.ForeignKey("Dashboards.id"), nullable=False, index=True)
+    dashboard_id = db.Column(
+        db.Integer, db.ForeignKey("Dashboards.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     dashboard = db.relationship("Dashboard", back_populates="invites")
     created_at = db.Column(UTCDateTime, default=utc_now, index=True)
     updated_at = db.Column(UTCDateTime, default=utc_now, onupdate=utc_now)

@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.extensions import db, login_manager, limiter
+from app.helpers.account_deletion import delete_user_account
 from app.helpers.email import collect_email_errors
 from app.helpers.email_verification import generate_email_token, load_email_token
 from app.helpers.invite_tokens import invite_token_from_next, invited_email_from_next
@@ -90,6 +91,19 @@ def _change_password_context(errors=None, current_password="", new_password="", 
         "confirm_password": confirm_password,
         "errors": errors or [],
         "title": "Change your password",
+    }
+
+def _delete_account_context(errors=None):
+    csrf_token = session.get("delete_account_csrf_token")
+    if not csrf_token:
+        csrf_token = secrets.token_urlsafe(32)
+        session["delete_account_csrf_token"] = csrf_token
+
+    return {
+        "action": url_for("auth.delete_account"),
+        "csrf_token": csrf_token,
+        "errors": errors or [],
+        "title": "Delete your account",
     }
 
 def send_verification_email(user):
@@ -349,6 +363,46 @@ def change_password():
                 ),
             )
     return render_template("auth/change_password.html", **_change_password_context())
+
+
+@auth_bp.route("/delete-account", methods=["GET", "POST"])
+@limiter.limit("50 per minute; 100 per hour", methods=["POST"])
+@login_required
+def delete_account():
+    errors = {"form": [], "current_password": []}
+    if request.method == "POST":
+        current_password = request.form.get("current_password") or ""
+
+        submitted_token = request.form.get("csrf_token", "")
+        stored_token = session.get("delete_account_csrf_token", "")
+        if not (
+            isinstance(submitted_token, str)
+            and isinstance(stored_token, str)
+            and hmac.compare_digest(submitted_token, stored_token)
+        ):
+            errors["form"].append("Your form has expired. Please try again.")
+        if not current_password:
+            errors["current_password"].append("Current password is required.")
+        elif not errors["form"] and not check_password_hash(
+            current_user.password_hash, current_password
+        ):
+            errors["current_password"].append("Invalid current password.")
+
+        if not any(errors.values()):
+            try:
+                delete_user_account(current_user._get_current_object())
+                db.session.commit()
+            except SQLAlchemyError:
+                db.session.rollback()
+                errors["form"].append("Unable to delete your account. Please try again.")
+            else:
+                logout_user()
+                session.pop("delete_account_csrf_token", None)
+                flash("Your account has been permanently deleted.", "success")
+                return redirect(url_for("main.index"))
+
+        return render_template("auth/delete_account.html", **_delete_account_context(errors))
+    return render_template("auth/delete_account.html", **_delete_account_context())
 
 
 @auth_bp.route("/verify-email/resend", methods=["POST"])

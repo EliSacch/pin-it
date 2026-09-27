@@ -29,6 +29,16 @@
     color: var(--clr-tertiary);
 }
 
+.delete-account-warning ul {
+    margin-top: var(--spacing-s);
+    padding-left: var(--spacing-xl);
+    list-style: disc;
+}
+
+.delete-account-warning li + li {
+    margin-top: var(--spacing-s);
+}
+
 /* --------------------------- Fields */
 
 .form-control {

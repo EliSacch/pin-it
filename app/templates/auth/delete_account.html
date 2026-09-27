@@ -1,0 +1,39 @@
+{% extends "forms/formWrapper.html" %}
+{% from "forms/inputs/textImput.html" import text_input %}
+{% from "macros/button.html" import button %}
+{% block title %}Delete Account{% endblock %}
+{% block formContent %}
+    <form id="delete-account" action="{{ action }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if errors.form %}
+            <div class="error-msg" role="alert">
+                <ul>
+                    {% for error in errors.form %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+        <div class="delete-account-warning">
+            <p>This permanently deletes your account and cannot be undone.</p>
+            <ul>
+                <li>All dashboards you own are deleted, including every note on them, even notes added by collaborators.</li>
+                <li>Collaborators will lose access to your dashboards.</li>
+                <li>Notes you added to other people's dashboards stay there, attributed to a deleted user, and can be managed by those dashboards' owners.</li>
+            </ul>
+        </div>
+        {{ text_input(name="current_password",
+            label="Current Password",
+            type="password",
+            autocomplete="current-password",
+            required=true,
+            errors=errors.current_password) }}
+        <br>
+        <div class="form-footer center-items">
+            <a href="{{ url_for('profile.index') }}"
+               class="base-button secondary"
+               aria-label="Cancel">Cancel</a>
+            {{ button('Delete Account', 'Deleting...') }}
+        </div>
+    </form>
+{% endblock %}

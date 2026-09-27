@@ -6,13 +6,24 @@ from app.helpers.time import UTCDateTime, format_utc, utc_now
 
 class Note(db.Model):
     __tablename__ = "Notes"
+    __table_args__ = (
+        db.CheckConstraint(
+            "(owner_id IS NULL) <> (owner_deleted_at IS NULL)",
+            name="ck_notes_owner_or_owner_deleted_at",
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     title = db.Column(db.String(50), nullable=False)
     content_json = db.Column(db.Text, default='[]')
-    owner_id = db.Column(db.Integer, db.ForeignKey("Users.id"), nullable=False, index=True)
+    owner_id = db.Column(
+        db.Integer, db.ForeignKey("Users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     owner = db.relationship("User", back_populates="notes")
-    dashboard_id = db.Column(db.Integer, db.ForeignKey("Dashboards.id"), nullable=False, index=True)
+    owner_deleted_at = db.Column(UTCDateTime, nullable=True)
+    dashboard_id = db.Column(
+        db.Integer, db.ForeignKey("Dashboards.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     dashboard = db.relationship("Dashboard", back_populates="notes")
     created_at = db.Column(UTCDateTime, default=utc_now, index=True)
     updated_at = db.Column(UTCDateTime, default=utc_now, onupdate=utc_now)

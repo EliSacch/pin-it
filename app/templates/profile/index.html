@@ -85,6 +85,9 @@
             <a href="{{ url_for('auth.change_password') }}"
                class="base-button secondary"
                aria-label="Change Password">Change Password</a>
+            <a href="{{ url_for('auth.delete_account') }}"
+               class="base-button secondary"
+               aria-label="Delete Account">Delete Account</a>
         </section>
         <section class="profile-footer">
             {% if user.is_authenticated %}
