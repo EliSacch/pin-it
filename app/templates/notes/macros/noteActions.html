@@ -2,19 +2,21 @@
 {% macro noteActions(note, csrf_token, dashboard, can_edit=true) %}
     <span class="note-actions-created-at">{{ note.created_at if note else "" }}</span>
     {% if can_edit %}
-    <div class="note-action-buttons">
-        {% call tooltip('Delete', 'bottom') %}
-            <button type="button"
-                    class="delete-btn modal-trigger"
-                    data-modal="deleteNoteModal"
-                    data-form-action="{{ url_for('notes.delete', dashboard_id=dashboard.id, note_id=note.id) }}"
-                    aria-label="Delete note">
-                <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
-            </button>
-        {% endcall %}
-        {% call tooltip('Edit', 'bottom') %}
-            <button type="button" class="edit-btn" aria-label="Edit note"><i class="fa-solid fa-pencil" aria-hidden="true"></i></button>
-        {% endcall %}
-    </div>
+        <div class="note-action-buttons">
+            {% call tooltip('Delete', 'bottom') %}
+                <button type="button"
+                        class="delete-btn modal-trigger"
+                        data-modal="deleteNoteModal"
+                        data-form-action="{{ url_for('notes.delete', dashboard_id=dashboard.id, note_id=note.id) }}"
+                        aria-label="Delete note">
+                    <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                </button>
+            {% endcall %}
+            {% call tooltip('Edit', 'bottom') %}
+                <button type="button" class="edit-btn" aria-label="Edit note">
+                    <i class="fa-solid fa-pencil" aria-hidden="true"></i>
+                </button>
+            {% endcall %}
+        </div>
     {% endif %}
 {% endmacro %}

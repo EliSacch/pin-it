@@ -22,6 +22,17 @@
                     </a>
                 {% endcall %}
             {% endif %}
+        {% elif not is_owner and request.endpoint == 'dashboards.get' %}
+            {% call tooltip('Leave dashboard', 'right', 'light') %}
+                <button type="button"
+                        class="base-button link-light modal-trigger"
+                        data-modal="leaveDashboardModal"
+                        aria-haspopup="dialog"
+                        aria-controls="leaveDashboardModal"
+                        aria-label="Leave dashboard">
+                    <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
+                </button>
+            {% endcall %}
         {% endif %}
     </div>
 {% endmacro %}

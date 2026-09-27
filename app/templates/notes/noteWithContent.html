@@ -9,12 +9,7 @@
                     <input type="checkbox"
                            class="note-todo-checkbox"
                            {% if block.isChecked %}checked{% endif %}
-                           {% if can_edit %}
-                           data-toggle-url="{{ url_for('notes.toggle_todo', dashboard_id=dashboard.id, note_id=note.id, block_index=loop.index0) }}"
-                           data-csrf="{{ csrf_token }}"
-                           {% else %}
-                           disabled
-                           {% endif %}>
+                           {% if can_edit %} data-toggle-url="{{ url_for('notes.toggle_todo', dashboard_id=dashboard.id, note_id=note.id, block_index=loop.index0) }}" data-csrf="{{ csrf_token }}" {% else %} disabled {% endif %}>
                     <span class="note-todo-text">{{ block.text }}</span>
                 </label>
             {% else %}

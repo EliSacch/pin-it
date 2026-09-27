@@ -7,110 +7,114 @@
 {% from "forms/revokeCollaboratorForm.html" import revokeCollaboratorForm %}
 {% block title %}{{ dashboard.name }} settings{% endblock %}
 {% block content %}
-<main id="main-content" class="dashboard-settings-page">
-    <section class="dashboard-info" aria-labelledby="dashboard-settings-title">
-        <h2 id="dashboard-settings-title">Dashboard settings</h2>
-        <div class="info-item" data-inline-editor>
-            <span class="info-item-label">Name:</span>
-            <div class="info-item-value{% if name_errors %} hidden-form{% endif %}"
-                 data-inline-editor-view>
-                <span class="info-item-value">
-                    {{ dashboard.name }}
-                    {% call tooltip('Edit name', 'right') %}
-                        <button type="button" class="base-button link info-item-edit-btn"
-                                data-inline-editor-trigger
-                                aria-label="Edit dashboard name"
-                                aria-expanded="{{ 'true' if name_errors else 'false' }}"
-                                aria-controls="update-dashboard-name-form">
-                            <i class="fa-solid fa-pencil" aria-hidden="true"></i>
+    <main id="main-content" class="dashboard-settings-page">
+        <section class="dashboard-info" aria-labelledby="dashboard-settings-title">
+            <h2 id="dashboard-settings-title">Dashboard settings</h2>
+            <div class="info-item" data-inline-editor>
+                <span class="info-item-label">Name:</span>
+                <div class="info-item-value{% if name_errors %} hidden-form{% endif %}"
+                     data-inline-editor-view>
+                    <span class="info-item-value">
+                        {{ dashboard.name }}
+                        {% call tooltip('Edit name', 'right') %}
+                            <button type="button"
+                                    class="base-button link info-item-edit-btn"
+                                    data-inline-editor-trigger
+                                    aria-label="Edit dashboard name"
+                                    aria-expanded="{{ 'true' if name_errors else 'false' }}"
+                                    aria-controls="update-dashboard-name-form">
+                                <i class="fa-solid fa-pencil" aria-hidden="true"></i>
+                            </button>
+                        {% endcall %}
+                    </span>
+                </div>
+                <div class="info-item-edit{% if not name_errors %} hidden-form{% endif %}"
+                     data-inline-editor-panel>
+                    {{ dashboardNameForm(url_for('dashboards.update', dashboard_id=dashboard.id),
+                        dashboards_csrf_token,
+                        errors=name_errors,
+                        values=name_values,
+                        form_id='update-dashboard-name-form') }}
+                </div>
+            </div>
+            <div class="info-item">
+                <span class="info-item-label" id="collaborators-label">Collaborators:</span>
+                <div class="info-item-value collaborators-value">
+                    <div class="info-item-value dashboard-collaborators">
+                        {% if invites %}
+                            <ul class="invite-list" aria-labelledby="collaborators-label">
+                                {% for invite in invites %}
+                                    <li class="invite-list-item">
+                                        <span class="invite-summary">
+                                            <span class="invite-email">{{ invite.email }}</span>
+                                            <span class="invite-status invite-status-{{ invite.status }}">{{ invite.status|capitalize
+                                            }}</span>
+                                        </span>
+                                        <div class="invite-actions">
+                                            {% call tooltip('Revoke access', 'bottom') %}
+                                                <button type="button"
+                                                        class="base-button link invite-action-btn modal-trigger"
+                                                        data-modal="revokeCollaboratorModal"
+                                                        data-form-action="{{ url_for('invites.revoke', dashboard_id=dashboard.id, invite_id=invite.id) }}"
+                                                        aria-haspopup="dialog"
+                                                        aria-controls="revokeCollaboratorModal"
+                                                        aria-label="Revoke access for {{ invite.email }}">
+                                                    <i class="fa-solid fa-user-minus" aria-hidden="true"></i>
+                                                </button>
+                                            {% endcall %}
+                                            {% if invite.status in ("pending", "rejected") %}
+                                                <form method="post"
+                                                      action="{{ url_for('invites.resend', dashboard_id=dashboard.id, invite_id=invite.id) }}">
+                                                    <input type="hidden" name="csrf_token" value="{{ invites_csrf_token }}">
+                                                    {% call tooltip('Resend invitation', 'bottom') %}
+                                                        <button type="submit"
+                                                                class="base-button link invite-action-btn"
+                                                                aria-label="Resend invitation to {{ invite.email }}">
+                                                            <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+                                                        </button>
+                                                    {% endcall %}
+                                                </form>
+                                            {% endif %}
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="invite-list-empty">No collaborators yet.</p>
+                        {% endif %}
+                    </div>
+                    {% call tooltip('Add collaborators', 'right') %}
+                        <button type="button"
+                                class="base-button link info-item-edit-btn modal-trigger"
+                                data-modal="addCollaboratorsModal"
+                                aria-label="Add collaborators"
+                                aria-haspopup="dialog"
+                                aria-controls="addCollaboratorsModal">
+                            <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
                         </button>
                     {% endcall %}
-                </span>
-            </div>
-            <div class="info-item-edit{% if not name_errors %} hidden-form{% endif %}"
-                 data-inline-editor-panel>
-                {{ dashboardNameForm(url_for('dashboards.update', dashboard_id=dashboard.id),
-                dashboards_csrf_token,
-                errors=name_errors,
-                values=name_values,
-                form_id='update-dashboard-name-form') }}
-            </div>
-        </div>
-        <div class="info-item">
-            <span class="info-item-label" id="collaborators-label">Collaborators:</span>
-            <div class="info-item-value collaborators-value">
-                <div class="info-item-value dashboard-collaborators">
-                    {% if invites %}
-                    <ul class="invite-list" aria-labelledby="collaborators-label">
-                        {% for invite in invites %}
-                        <li class="invite-list-item">
-                            <span class="invite-summary">
-                                <span class="invite-email">{{ invite.email }}</span>
-                                <span class="invite-status invite-status-{{ invite.status }}">{{ invite.status|capitalize
-                                    }}</span>
-                            </span>
-                            <div class="invite-actions">
-                                {% call tooltip('Revoke access', 'bottom') %}
-                                <button type="button" class="base-button link invite-action-btn modal-trigger"
-                                        data-modal="revokeCollaboratorModal"
-                                        data-form-action="{{ url_for('invites.revoke', dashboard_id=dashboard.id, invite_id=invite.id) }}"
-                                        aria-haspopup="dialog"
-                                        aria-controls="revokeCollaboratorModal"
-                                        aria-label="Revoke access for {{ invite.email }}">
-                                    <i class="fa-solid fa-user-minus" aria-hidden="true"></i>
-                                </button>
-                                {% endcall %}
-                                {% if invite.status in ("pending", "rejected") %}
-                                <form method="post"
-                                      action="{{ url_for('invites.resend', dashboard_id=dashboard.id, invite_id=invite.id) }}">
-                                    <input type="hidden" name="csrf_token" value="{{ invites_csrf_token }}">
-                                    {% call tooltip('Resend invitation', 'bottom') %}
-                                    <button type="submit" class="base-button link invite-action-btn"
-                                            aria-label="Resend invitation to {{ invite.email }}">
-                                        <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
-                                    </button>
-                                    {% endcall %}
-                                </form>
-                                {% endif %}
-                            </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <p class="invite-list-empty">No collaborators yet.</p>
-                    {% endif %}
                 </div>
-                {% call tooltip('Add collaborators', 'right') %}
-                    <button type="button" class="base-button link info-item-edit-btn modal-trigger"
-                            data-modal="addCollaboratorsModal"
-                            aria-label="Add collaborators"
-                            aria-haspopup="dialog"
-                            aria-controls="addCollaboratorsModal">
-                        <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
-                    </button>
-                {% endcall %}
             </div>
-        </div>
-    </section>
-    <section class="dashboard-settings-actions">
-        <button type="button"
-                class="base-button primary modal-trigger"
-                data-modal="deleteDashboardModal"
-                data-form-action="{{ url_for('dashboards.delete', dashboard_id=dashboard.id) }}"
-                aria-haspopup="dialog"
-                aria-controls="deleteDashboardModal">Delete dashboard</button>
-    </section>
-</main>
-{% set inviteFormHtml = inviteForm(url_for('invites.create', dashboard_id=dashboard.id),
-invites_csrf_token,
-errors=invite_errors,
-values=invite_values,
-form_id='add-collaborators-form') %}
-{{ modal('addCollaboratorsModal', 'Add collaborators', inviteFormHtml, confirm_action='submit-form') }}
-{% set revokeFormHtml = revokeCollaboratorForm(invites_csrf_token, errors=revoke_errors) %}
-{{ modal('revokeCollaboratorModal', 'Revoke access', revokeFormHtml, confirm_action='submit-form') }}
-{% set deleteDashboardFormHtml = deleteDashboardForm(dashboards_csrf_token,
-errors=delete_errors,
-action=url_for('dashboards.delete', dashboard_id=dashboard.id)) %}
-{{ modal('deleteDashboardModal', 'Delete dashboard', deleteDashboardFormHtml, confirm_action='submit-form') }}
+        </section>
+        <section class="dashboard-settings-actions">
+            <button type="button"
+                    class="base-button primary modal-trigger"
+                    data-modal="deleteDashboardModal"
+                    data-form-action="{{ url_for('dashboards.delete', dashboard_id=dashboard.id) }}"
+                    aria-haspopup="dialog"
+                    aria-controls="deleteDashboardModal">Delete dashboard</button>
+        </section>
+    </main>
+    {% set inviteFormHtml = inviteForm(url_for('invites.create', dashboard_id=dashboard.id),
+        invites_csrf_token,
+        errors=invite_errors,
+        values=invite_values,
+    form_id='add-collaborators-form') %}
+    {{ modal('addCollaboratorsModal', 'Add collaborators', inviteFormHtml, confirm_action='submit-form') }}
+    {% set revokeFormHtml = revokeCollaboratorForm(invites_csrf_token, errors=revoke_errors) %}
+    {{ modal('revokeCollaboratorModal', 'Revoke access', revokeFormHtml, confirm_action='submit-form') }}
+    {% set deleteDashboardFormHtml = deleteDashboardForm(dashboards_csrf_token,
+        errors=delete_errors,
+    action=url_for('dashboards.delete', dashboard_id=dashboard.id)) %}
+    {{ modal('deleteDashboardModal', 'Delete dashboard', deleteDashboardFormHtml, confirm_action='submit-form') }}
 {% endblock %}

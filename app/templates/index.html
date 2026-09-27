@@ -5,6 +5,7 @@
 {% from "forms/dashboardForm.html" import dashboardForm %}
 {% from "forms/noteForm.html" import noteForm %}
 {% from "forms/deleteNoteForm.html" import deleteNoteForm %}
+{% from "forms/leaveDashboardForm.html" import leaveDashboardForm %}
 {% from "macros/tooltip.html" import tooltip %}
 {% from "macros/modal.html" import modal %}
 {% extends "base.html" %}
@@ -25,28 +26,28 @@
                         <i class="fa-solid fa-plus" aria-hidden="true"></i>
                     </button>
                 {% endcall %}
-            <ul id="options">
-                <li>
-                    {% call tooltip('Add note', 'top') %}
-                        <button type="button"
-                                class="center-items"
-                                id="addNoteButton"
-                                aria-label="Add note">
-                            <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
-                        </button>
-                    {% endcall %}
-            </li>
-            <li>
-                {% call tooltip('Add dashboard', 'top') %}
-                    <button type="button"
-                            class="center-items modal-trigger"
-                            data-modal="addDashboardModal"
-                            aria-label="Add dashboard">
-                        <i class="fa-regular fa-folder" aria-hidden="true"></i>
-                    </button>
-                {% endcall %}
-            </li>
-            </ul>
+                <ul id="options">
+                    <li>
+                        {% call tooltip('Add note', 'top') %}
+                            <button type="button"
+                                    class="center-items"
+                                    id="addNoteButton"
+                                    aria-label="Add note">
+                                <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
+                            </button>
+                        {% endcall %}
+                    </li>
+                    <li>
+                        {% call tooltip('Add dashboard', 'top') %}
+                            <button type="button"
+                                    class="center-items modal-trigger"
+                                    data-modal="addDashboardModal"
+                                    aria-label="Add dashboard">
+                                <i class="fa-regular fa-folder" aria-hidden="true"></i>
+                            </button>
+                        {% endcall %}
+                    </li>
+                </ul>
             </nav>
         {% endif %}
         <main id="main-content">
@@ -62,21 +63,21 @@
                                 {{ noteWithContent(note, csrf_token, dashboard) }}
                             </div>
                             {% if note.can_edit is not defined or note.can_edit %}
-                            <div class="note-edit{% if not note_errors %} hidden-form{% endif %}">
-                                {{ noteWithForm({
-                                    "Form": noteForm(
-                                    url_for(
-                                    "notes.update",
-                                    dashboard_id=dashboard.id,
-                                    note_id=note.id
-                                    ),
-                                    csrf_token,
-                                    note,
-                                    errors=note_errors,
-                                    values=note_values
-                                    )
-                                }) }}
-                            </div>
+                                <div class="note-edit{% if not note_errors %} hidden-form{% endif %}">
+                                    {{ noteWithForm({
+                                        "Form": noteForm(
+                                        url_for(
+                                        "notes.update",
+                                        dashboard_id=dashboard.id,
+                                        note_id=note.id
+                                        ),
+                                        csrf_token,
+                                        note,
+                                        errors=note_errors,
+                                        values=note_values
+                                        )
+                                    }) }}
+                                </div>
                             {% endif %}
                         </div>
                     {% endfor %}
@@ -116,5 +117,13 @@
         {% set deleteNoteFormHtml = deleteNoteForm(csrf_token) %}
         {{ modal('addDashboardModal', 'Add dashboard', addDashboardForm, confirm_action='submit-form') }}
         {{ modal('deleteNoteModal', 'Delete note', deleteNoteFormHtml, confirm_action='submit-form') }}
+        {% if dashboard and not is_owner %}
+            {% set leaveDashboardFormHtml = leaveDashboardForm(
+                dashboards_csrf_token,
+                errors=dashboard_errors.get('leave', {}),
+                action=url_for('dashboards.leave', dashboard_id=dashboard.id)
+            ) %}
+            {{ modal('leaveDashboardModal', 'Leave dashboard', leaveDashboardFormHtml, confirm_action='submit-form') }}
+        {% endif %}
     {% endif %}
 {% endblock %}

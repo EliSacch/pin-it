@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.models import Dashboard, Invite
+from app.models import Dashboard, Invite, Note
 from tests.conftest import CSRF_TOKEN, invite_url_token, login, mail_outbox
 
 JSON_HEADERS = {"X-Requested-With": "XMLHttpRequest"}
@@ -100,6 +100,162 @@ def test_owner_sees_settings_gear(client, user, dashboard):
     html = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}").get_data(as_text=True)
 
     assert 'aria-label="Dashboard settings"' in html
+    assert 'aria-label="Leave dashboard"' not in html
+    assert 'id="leaveDashboardModal"' not in html
+
+
+def leave_path(dashboard):
+    return f"/dashboards/{dashboard.id}/leave"
+
+
+def accepted_invite(dashboard, person):
+    return db.session.scalar(
+        db.select(Invite).where(
+            Invite.dashboard_id == dashboard.id, Invite.user_id == person.id
+        )
+    )
+
+
+def test_collaborator_sees_leave_dashboard_control(client, other_user, dashboard):
+    add_collaborator(dashboard, other_user)
+    login(client, other_user)
+
+    html = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}").get_data(as_text=True)
+
+    assert 'aria-label="Leave dashboard"' in html
+    assert 'data-modal="leaveDashboardModal"' in html
+    assert 'id="leaveDashboardModal"' in html
+    assert f'action="{leave_path(dashboard)}"' in html
+
+
+def test_leave_requires_login(client, other_user, dashboard):
+    add_collaborator(dashboard, other_user)
+
+    response = client.post(leave_path(dashboard), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+    assert accepted_invite(dashboard, other_user).deleted_at is None
+
+
+def test_leave_returns_404_for_owner(client, user, dashboard):
+    login(client, user)
+
+    response = client.post(leave_path(dashboard), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 404
+    assert db.session.get(Dashboard, dashboard.id) is not None
+
+
+def test_leave_returns_404_for_non_member(client, other_user, dashboard):
+    login(client, other_user)
+
+    response = client.post(leave_path(dashboard), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 404
+
+
+def test_leave_returns_404_for_pending_invitee(client, other_user, dashboard):
+    db.session.add(
+        Invite(dashboard_id=dashboard.id, email=other_user.email, user_id=other_user.id)
+    )
+    db.session.commit()
+    login(client, other_user)
+
+    response = client.post(leave_path(dashboard), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 404
+    assert accepted_invite(dashboard, other_user).deleted_at is None
+
+
+def test_leave_rejects_invalid_csrf(client, other_user, dashboard):
+    add_collaborator(dashboard, other_user)
+    login(client, other_user)
+
+    response = client.post(leave_path(dashboard), data={"csrf_token": "wrong"})
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(f"/dashboards/{dashboard.id}/{dashboard.slug}")
+    assert accepted_invite(dashboard, other_user).deleted_at is None
+    with client.session_transaction() as session:
+        errors = session["dashboard_form_errors"]["leave"]
+        assert errors["form"] == ["Invalid form submission."]
+
+
+def test_leave_csrf_error_renders_in_modal(client, other_user, dashboard):
+    add_collaborator(dashboard, other_user)
+    login(client, other_user)
+
+    response = client.post(
+        leave_path(dashboard), data={"csrf_token": "wrong"}, follow_redirects=True
+    )
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Invalid form submission." in html
+    assert 'id="leaveDashboardForm"' in html
+
+
+def test_leave_revokes_access_and_redirects_home(client, other_user, dashboard):
+    add_collaborator(dashboard, other_user)
+    login(client, other_user)
+
+    response = client.post(leave_path(dashboard), data={"csrf_token": CSRF_TOKEN})
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+    assert accepted_invite(dashboard, other_user).deleted_at is not None
+    with client.session_transaction() as session:
+        assert "dashboards_csrf_token" not in session
+        assert ("success", "You left Work.") in session.get("_flashes", [])
+
+    login(client, other_user)
+    dashboard_response = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}")
+    home_html = client.get("/").get_data(as_text=True)
+    repeat_response = client.post(leave_path(dashboard), data={"csrf_token": CSRF_TOKEN})
+
+    assert dashboard_response.status_code == 404
+    assert f'href="/dashboards/{dashboard.id}/{dashboard.slug}"' not in home_html
+    assert repeat_response.status_code == 404
+
+
+def test_leave_json(client, other_user, dashboard):
+    add_collaborator(dashboard, other_user)
+    login(client, other_user)
+
+    response = client.post(
+        leave_path(dashboard), data={"csrf_token": CSRF_TOKEN}, headers=JSON_HEADERS
+    )
+
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["ok"] is True
+    assert payload["redirect_url"] == "/"
+    assert accepted_invite(dashboard, other_user).deleted_at is not None
+
+
+def test_leave_preserves_collaborator_notes(client, user, other_user, dashboard):
+    add_collaborator(dashboard, other_user)
+    note = Note(
+        title="Member note",
+        content_json="[]",
+        owner_id=other_user.id,
+        dashboard_id=dashboard.id,
+    )
+    db.session.add(note)
+    db.session.commit()
+    login(client, other_user)
+
+    client.post(leave_path(dashboard), data={"csrf_token": CSRF_TOKEN})
+
+    kept = db.session.get(Note, note.id)
+    assert kept is not None
+    assert kept.owner_id == other_user.id
+    assert kept.dashboard_id == dashboard.id
+
+    login(client, user)
+    owner_html = client.get(f"/dashboards/{dashboard.id}/{dashboard.slug}").get_data(as_text=True)
+    assert "Member note" in owner_html
 
 
 def test_create_requires_login(client):

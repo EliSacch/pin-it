@@ -29,6 +29,15 @@ def is_dashboard_member(dashboard, user):
     )
 
 
+def accepted_invite_for(dashboard, user):
+    return db.session.scalar(
+        db.select(Invite).where(
+            Invite.dashboard_id == dashboard.id,
+            *_accepted_invite_filter(user),
+        )
+    )
+
+
 def get_member_dashboard_or_404(dashboard_id):
     dashboard = db.session.get(Dashboard, dashboard_id)
     if not is_dashboard_member(dashboard, current_user):
