@@ -2,6 +2,7 @@ import re
 
 import pytest
 from flask import g
+from sqlalchemy import event
 from sqlalchemy.pool import StaticPool
 from werkzeug.security import generate_password_hash
 
@@ -29,6 +30,12 @@ def app():
     )
     limiter.enabled = False
     with flask_app.app_context():
+        # SQLite ignores ON DELETE rules unless foreign keys are enabled per connection.
+        event.listen(
+            db.engine,
+            "connect",
+            lambda dbapi_connection, _record: dbapi_connection.execute("PRAGMA foreign_keys=ON"),
+        )
         db.create_all()
         yield flask_app
         db.session.remove()

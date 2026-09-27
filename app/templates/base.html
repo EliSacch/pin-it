@@ -80,7 +80,7 @@
                         {% set logo_text %}{{ current_user.is_authenticated and current_user.username + "'s" or "My" }} Notes{% endset %}
                         {% endif %}
                         <div id="logo">
-                            {% if request.endpoint in ['auth.login', 'auth.register', 'auth.change_password', 'invitations.show'] %}
+                            {% if request.endpoint in ['auth.login', 'auth.register', 'auth.change_password', 'auth.delete_account', 'invitations.show'] %}
                                 <p class="site-title">{{ logo_text }}</p>
                             {% else %}
                                 <h1>{{ logo_text }}</h1>
