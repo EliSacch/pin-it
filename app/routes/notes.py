@@ -1,4 +1,5 @@
 import hmac
+import html
 import secrets
 import json
 import re
@@ -55,17 +56,19 @@ def _redirect_to_dashboard_with_errors(dashboard, form_key, errors, values=None)
     return _redirect_to_dashboard(dashboard)
 
 
-def _submitted_note_values():
+def _submitted_note_values(blocks):
     return {
         "title": request.form.get("title", ""),
-        "content": request.form.get("content", ""),
+        "content": json.dumps(blocks or []),
     }
 
 
 def _strip_html(value):
+    """Return plain text; output paths must escape it before rendering as HTML."""
     if not isinstance(value, str):
         return ""
-    return _HTML_TAG_RE.sub("", value).replace("&nbsp;", " ").strip()
+    text = _HTML_TAG_RE.sub("", value)
+    return html.unescape(text).replace("\xa0", " ").strip()
 
 
 def _flatten_checklist_items(items):
@@ -159,11 +162,14 @@ def _can_manage(note, dashboard):
 def create(dashboard_id):
     dashboard = get_member_dashboard_or_404(dashboard_id)
     if request.method == "POST":
+        if not _has_valid_notes_csrf_token():
+            return _redirect_to_dashboard_with_errors(
+                dashboard, "create", ["Invalid form submission."]
+            )
+
         errors = []
         title = request.form.get("title", "")
         content = request.form.get("content", "")
-        if not _has_valid_notes_csrf_token():
-            errors.append("Invalid form submission.")
         if len(title) > 50:
             errors.append("Title must be less than 50 characters.")
 
@@ -178,7 +184,7 @@ def create(dashboard_id):
                 dashboard,
                 "create",
                 errors,
-                _submitted_note_values(),
+                _submitted_note_values(blocks),
             )
 
         new_note = Note(
@@ -197,7 +203,7 @@ def create(dashboard_id):
                 dashboard,
                 "create",
                 ["There was an error submitting this request. Please try again."],
-                _submitted_note_values(),
+                _submitted_note_values(blocks),
             )
         return _redirect_to_dashboard(dashboard)
     return _redirect_to_dashboard(dashboard)
@@ -212,11 +218,14 @@ def update(dashboard_id, note_id):
         flash("You are not authorized to edit this note.", "error")
         return _redirect_to_dashboard(dashboard)
     if request.method == "POST":
+        if not _has_valid_notes_csrf_token():
+            return _redirect_to_dashboard_with_errors(
+                dashboard, note.id, ["Invalid form submission."]
+            )
+
         errors = []
         title = request.form.get("title", "")
         content = request.form.get("content", "")
-        if not _has_valid_notes_csrf_token():
-            errors.append("Invalid form submission.")
         if len(title) > 50:
             errors.append("Title must be less than 50 characters.")
 
@@ -231,7 +240,7 @@ def update(dashboard_id, note_id):
                 dashboard,
                 note.id,
                 errors,
-                _submitted_note_values(),
+                _submitted_note_values(blocks),
             )
         note.title = title
         note.content_json = json.dumps(blocks)
@@ -245,7 +254,7 @@ def update(dashboard_id, note_id):
                 dashboard,
                 note.id,
                 ["There was an error submitting this request. Please try again."],
-                _submitted_note_values(),
+                _submitted_note_values(blocks),
             )
     return _redirect_to_dashboard(dashboard)
 

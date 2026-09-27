@@ -1,22 +1,26 @@
 {% from "macros/tooltip.html" import tooltip %}
 {% macro formActions(save_aria_label, loading_text) %}
     <div class="form-action-buttons">
-        {{ tooltip('<button type="button"
-            aria-label="Cancel"
-            class="form-button-cancel cancel-btn">
-            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-            </button>', 'Cancel', 'bottom') }}
-    {{ tooltip('<button type="submit"
-        aria-label="' ~ save_aria_label ~ '"
-        class="form-button-save save-btn"
-        data-loading-text="' ~ loading_text ~ '">
-        <span class="btn-label">
-            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
-        </span>
-        <span class="btn-loading" hidden>
-            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-            <span class="btn-loading-text visually-hidden">' ~ loading_text ~ '</span>
-        </span>
-        </button>', 'Save', 'bottom') }}
+        {% call tooltip('Cancel', 'bottom') %}
+            <button type="button"
+                    aria-label="Cancel"
+                    class="form-button-cancel cancel-btn">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+        {% endcall %}
+        {% call tooltip('Save', 'bottom') %}
+            <button type="submit"
+                    aria-label="{{ save_aria_label }}"
+                    class="form-button-save save-btn"
+                    data-loading-text="{{ loading_text }}">
+                <span class="btn-label">
+                    <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                </span>
+                <span class="btn-loading" hidden>
+                    <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                    <span class="btn-loading-text visually-hidden">{{ loading_text }}</span>
+                </span>
+            </button>
+        {% endcall %}
     </div>
 {% endmacro %}

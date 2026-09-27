@@ -16,35 +16,35 @@
     <div id="create-and-notes" class="skip-target" tabindex="-1">
         {% if current_user.is_authenticated %}
             <nav id="options-nav" aria-label="Create">
-                {{ tooltip('<button
-                    type="button"
-                    id="options-toggler"
-                    aria-label="Open options"
-                    aria-controls="options"
-                    aria-expanded="false"
-                    >
-                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                    </button>', 'Open options', 'top') }}
+                {% call tooltip('Open options', 'top') %}
+                    <button type="button"
+                            id="options-toggler"
+                            aria-label="Open options"
+                            aria-controls="options"
+                            aria-expanded="false">
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    </button>
+                {% endcall %}
             <ul id="options">
                 <li>
-                    {{ tooltip('<button
-                        type="button"
-                        class="center-items"
-                        id="addNoteButton"
-                        aria-label="Add note"
-                        >
-                        <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
-                        </button>', 'Add note', 'top') }}
+                    {% call tooltip('Add note', 'top') %}
+                        <button type="button"
+                                class="center-items"
+                                id="addNoteButton"
+                                aria-label="Add note">
+                            <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
+                        </button>
+                    {% endcall %}
             </li>
             <li>
-                {{ tooltip('<button
-                    type="button"
-                    class="center-items modal-trigger"
-                    data-modal="addDashboardModal"
-                    aria-label="Add dashboard"
-                    >
-                    <i class="fa-regular fa-folder" aria-hidden="true"></i>
-                    </button>', 'Add dashboard', 'top') }}
+                {% call tooltip('Add dashboard', 'top') %}
+                    <button type="button"
+                            class="center-items modal-trigger"
+                            data-modal="addDashboardModal"
+                            aria-label="Add dashboard">
+                        <i class="fa-regular fa-folder" aria-hidden="true"></i>
+                    </button>
+                {% endcall %}
             </li>
             </ul>
             </nav>

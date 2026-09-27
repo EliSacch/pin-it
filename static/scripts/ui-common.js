@@ -142,6 +142,10 @@ $(function () {
         }
     });
 
+    $(document).on('click', '#messages .close-button', function () {
+        $(this).closest('.message').remove();
+    });
+
     $(document).on('submit', 'form', function (event) {
         const $form = $(this);
         const submitter = event.originalEvent && event.originalEvent.submitter;

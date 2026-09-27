@@ -12,17 +12,7 @@
         <meta name="keywords" content="notes todo">
         <meta name="author" content="Elisa S">
         <title>Pin It - {% block title %}{% endblock %}</title>
-        <script>
-            (function () {
-                try {
-                    if (sessionStorage.getItem('pinit-page-transition') === '1') {
-                        document.documentElement.classList.add('is-page-pending');
-                    }
-                } catch (err) {
-                    /* ignore storage errors */
-                }
-            })();
-        </script>
+        <script src="{{ url_for('static', filename='scripts/page-transition-boot.js') }}"></script>
         <!-- Font awesome kit -->
         <script src="https://kit.fontawesome.com/4c90250119.js"
                 crossorigin="anonymous"></script>
@@ -51,16 +41,16 @@
                 <nav id="dashboards-nav"
                      class="center-items column"
                      aria-label="Dashboards">
-                    {{ tooltip('<button
-                        id="dashboards-toggler"
-                        type="button"
-                        aria-label="Open dashboards"
-                        aria-controls="dashboards-list"
-                        aria-expanded="false"
-                        >
-                        <span class="dashboards-list-closed-icon"><i class="fa-regular fa-folder" aria-hidden="true"></i></span>
-                        <span class="dashboards-list-expanded-icon"><i class="fa-regular fa-folder-open" aria-hidden="true"></i></span>
-                        </button>', 'All Dashboards', 'right', 'light') }}
+                    {% call tooltip('All Dashboards', 'right', 'light') %}
+                        <button id="dashboards-toggler"
+                                type="button"
+                                aria-label="Open dashboards"
+                                aria-controls="dashboards-list"
+                                aria-expanded="false">
+                            <span class="dashboards-list-closed-icon"><i class="fa-regular fa-folder" aria-hidden="true"></i></span>
+                            <span class="dashboards-list-expanded-icon"><i class="fa-regular fa-folder-open" aria-hidden="true"></i></span>
+                        </button>
+                    {% endcall %}
                 <ul id="dashboards-list">
                     {% for item in dashboards %}
                         <li {% if dashboard is defined and dashboard and item.id == dashboard.id %}class="active"{% endif %}>
@@ -99,28 +89,26 @@
                     {% endif %}
                     {% if request.endpoint != 'profile.index' %}
                         <nav id="auth-nav" aria-label="Account">
-                            {% set profile_tooltip %}
-                                <a href="{{ url_for('profile.index') }}"
-                                   class="base-button link-light"
-                                   aria-label="Profile">
-                                    <i class="fa-solid fa-user" aria-hidden="true"></i>
-                                </a>
-                            {% endset %}
                             {% if current_user.is_authenticated %}
-                                {{ tooltip(profile_tooltip, 'Profile', 'left', 'light') }}
+                                {% call tooltip('Profile', 'left', 'light') %}
+                                    <a href="{{ url_for('profile.index') }}"
+                                       class="base-button link-light"
+                                       aria-label="Profile">
+                                        <i class="fa-solid fa-user" aria-hidden="true"></i>
+                                    </a>
+                                {% endcall %}
                             {% endif %}
                         </nav>
                     {% elif request.endpoint == 'profile.index' %}
                         <nav id="auth-nav" aria-label="Home">
-                            {% set profile_tooltip %}
-                                <a href="{{ url_for('main.index') }}"
-                                   class="base-button link-light"
-                                   aria-label="Home">
-                                    <i class="fa-solid fa-house" aria-hidden="true"></i>
-                                </a>
-                            {% endset %}
                             {% if current_user.is_authenticated %}
-                                {{ tooltip(profile_tooltip, 'Home', 'left', 'light') }}
+                                {% call tooltip('Home', 'left', 'light') %}
+                                    <a href="{{ url_for('main.index') }}"
+                                       class="base-button link-light"
+                                       aria-label="Home">
+                                        <i class="fa-solid fa-house" aria-hidden="true"></i>
+                                    </a>
+                                {% endcall %}
                             {% endif %}
                         </nav>
                     {% endif %}

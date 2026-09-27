@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros/alert.html" import alert %}
+{% from "macros/tooltip.html" import tooltip %}
 {% from "forms/usernameForm.html" import usernameForm %}
 {% from "forms/emailForm.html" import emailForm %}
 {% block title %}Profile{% endblock %}
@@ -12,13 +13,15 @@
                 <div class="profile-inline-view{% if username_errors %} hidden-form{% endif %}">
                     <span class="profile-info-item-value">
                         {{ user.username }}
-                        {{ tooltip('<button type="button"
-                            class="base-button link profile-inline-edit-btn"
-                            aria-label="Edit username"
-                            aria-expanded="' ~ ('true' if username_errors else 'false') ~ '"
-                            aria-controls="update-username-form">
-                            <i class="fa-solid fa-pencil" aria-hidden="true"></i>
-                            </button>', 'Edit username', 'right') }}
+                        {% call tooltip('Edit username', 'right') %}
+                            <button type="button"
+                                    class="base-button link profile-inline-edit-btn"
+                                    aria-label="Edit username"
+                                    aria-expanded="{{ 'true' if username_errors else 'false' }}"
+                                    aria-controls="update-username-form">
+                                <i class="fa-solid fa-pencil" aria-hidden="true"></i>
+                            </button>
+                        {% endcall %}
                     </span>
                 </div>
                 <div class="profile-inline-edit{% if not username_errors %} hidden-form{% endif %}">
@@ -43,13 +46,15 @@
                                 <span class="visually-hidden">Not verified</span>
                             {% endif %}
                         </span>
-                        {{ tooltip('<button type="button"
-                            class="base-button link profile-inline-edit-btn"
-                            aria-label="Edit email"
-                            aria-expanded="' ~ ('true' if email_errors else 'false') ~ '"
-                            aria-controls="update-email-form">
-                            <i class="fa-solid fa-pencil" aria-hidden="true"></i>
-                            </button>', 'Edit email', 'right') }}
+                        {% call tooltip('Edit email', 'right') %}
+                            <button type="button"
+                                    class="base-button link profile-inline-edit-btn"
+                                    aria-label="Edit email"
+                                    aria-expanded="{{ 'true' if email_errors else 'false' }}"
+                                    aria-controls="update-email-form">
+                                <i class="fa-solid fa-pencil" aria-hidden="true"></i>
+                            </button>
+                        {% endcall %}
                     </span>
                 </div>
                 <div class="profile-inline-edit{% if not email_errors %} hidden-form{% endif %}">
