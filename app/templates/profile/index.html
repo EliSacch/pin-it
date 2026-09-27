@@ -66,34 +66,34 @@
                 </div>
             </div>
             <div class="profile-info-item">
-            <span class="profile-info-item-label">Joined:</span>
-            <span class="profile-info-item-value">{{ user.created_at.strftime("%B %d, %Y") }}</span>
-        </div>
-    </section>
-    {% if user.email_verified != True %}
-        <section class="profile-email-verification">
-            {% call alert('Email not verified', 'Please verify your email to continue.', 'error') %}
-                <form action="{{ url_for('auth.resend_verification_email') }}"
-                      method="post">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <button type="submit" class="alert-action-btn">Resend verification email</button>
-                </form>
-            {% endcall %}
+                <span class="profile-info-item-label">Joined:</span>
+                <span class="profile-info-item-value">{{ user.created_at.strftime("%B %d, %Y") }}</span>
+            </div>
         </section>
-    {% endif %}
-    <section class="profile-actions">
-        <a href="{{ url_for('auth.change_password') }}"
-           class="base-button secondary"
-           aria-label="Change Password">Change Password</a>
-    </section>
-    <section class="profile-footer">
-        {% if user.is_authenticated %}
-            <button type="button"
-                    class="center-items modal-trigger base-button link"
-                    data-modal="logoutModal"
-                    aria-label="Logout">Logout</button>
+        {% if user.email_verified != True %}
+            <section class="profile-email-verification">
+                {% call alert('Email not verified', 'Please verify your email to continue.', 'error') %}
+                    <form action="{{ url_for('auth.resend_verification_email') }}"
+                          method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit" class="alert-action-btn">Resend verification email</button>
+                    </form>
+                {% endcall %}
+            </section>
         {% endif %}
-    </section>
-    {{ modal('logoutModal', 'Logout', 'Are you sure you want to logout?', confirm_action='logout') }}
+        <section class="profile-actions">
+            <a href="{{ url_for('auth.change_password') }}"
+               class="base-button secondary"
+               aria-label="Change Password">Change Password</a>
+        </section>
+        <section class="profile-footer">
+            {% if user.is_authenticated %}
+                <button type="button"
+                        class="center-items modal-trigger base-button link"
+                        data-modal="logoutModal"
+                        aria-label="Logout">Logout</button>
+            {% endif %}
+        </section>
+        {{ modal('logoutModal', 'Logout', 'Are you sure you want to logout?', confirm_action='logout') }}
     </main>
 {% endblock %}

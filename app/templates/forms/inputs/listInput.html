@@ -9,13 +9,14 @@
         <input type="hidden" name="{{ name }}" value="{{ item }}">
     </li>
 {% endmacro %}
-
 {% macro list_input(name, label, values=[], item_type='text', item_label='item',
     errors=[], required=false, field_id=none, hint=none) %}
     {% set input_id = field_id if field_id else name %}
     {% set items = values if values is iterable and values is not string else [] %}
     {% set describedby = [input_id ~ '-hint'] %}
-    {% if errors %}{% set describedby = describedby + [input_id ~ '-errors'] %}{% endif %}
+    {% if errors %}
+        {% set describedby = describedby + [input_id ~ '-errors'] %}
+    {% endif %}
     <div class="form-control-wrapper list-input"
          data-list-input
          data-item-type="{{ item_type }}"
@@ -37,7 +38,9 @@
         <p class="list-input-hint" id="{{ input_id }}-hint">
             {{ hint if hint else 'Separate multiple entries with commas or spaces.' }}
         </p>
-        <ul class="list-input-chips" aria-label="{{ label }}"{% if not items %} hidden{% endif %}>
+        <ul class="list-input-chips"
+            aria-label="{{ label }}"
+            {% if not items %} hidden{% endif %}>
             {% for item in items %}
                 {{ list_chip(name, item, item_label) }}
             {% endfor %}
@@ -45,7 +48,9 @@
         <template class="list-input-chip-template">
             {{ list_chip(name, '', item_label) }}
         </template>
-        <p class="visually-hidden list-input-status" role="status" aria-live="polite"></p>
+        <p class="visually-hidden list-input-status"
+           role="status"
+           aria-live="polite"></p>
         <div class="error-msg"
              id="{{ input_id }}-errors"
              role="alert"

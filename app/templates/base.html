@@ -27,8 +27,7 @@
         <script src="https://cdn.jsdelivr.net/npm/@editorjs/list@2.0.8/dist/editorjs-list.umd.js"
                 defer></script>
         <!-- Custom JS (bundled from static/scripts/*.js) -->
-        <script src="{{ url_for('static', filename='scripts/app.bundle.js') }}"
-                defer></script>
+        <script src="{{ url_for('static', filename='scripts/app.bundle.js') }}" defer></script>
         <!-- Custom CSS -->
         <link rel="stylesheet"
               href="{{ url_for('static', filename='css/style.css') }}">
@@ -51,24 +50,25 @@
                             <span class="dashboards-list-expanded-icon"><i class="fa-regular fa-folder-open" aria-hidden="true"></i></span>
                         </button>
                     {% endcall %}
-                <ul id="dashboards-list">
-                    {% for item in dashboards %}
-                        <li {% if dashboard is defined and dashboard and item.id == dashboard.id %}class="active"{% endif %}>
-                            <a href="{{ url_for('dashboards.get', dashboard_id=item.id, slug=item.slug) }}"
-                               {% if dashboard is defined and dashboard and item.id == dashboard.id %}aria-current="page"{% endif %}>
-                                <span class="dashboard-nav-label">
-                                    <span class="dashboard-nav-name">{{ item.name }}</span>
+                    <ul id="dashboards-list">
+                        {% for item in dashboards %}
+                            <li {% if dashboard is defined and dashboard and item.id == dashboard.id %}class="active"{% endif %}>
+                                <a href="{{ url_for('dashboards.get', dashboard_id=item.id, slug=item.slug) }}"
+                                   {% if dashboard is defined and dashboard and item.id == dashboard.id %}aria-current="page"{% endif %}>
+                                    <span class="dashboard-nav-label">
+                                        <span class="dashboard-nav-name">{{ item.name }}</span>
+                                        {% if item.is_shared %}
+                                            <i class="fa-solid fa-user-group dashboard-shared-icon"
+                                               aria-hidden="true"></i>
+                                        {% endif %}
+                                    </span>
                                     {% if item.is_shared %}
-                                        <i class="fa-solid fa-user-group dashboard-shared-icon" aria-hidden="true"></i>
+                                        <span class="dashboard-nav-owner"><span class="visually-hidden">shared </span>by {{ item.owner_username }}</span>
                                     {% endif %}
-                                </span>
-                                {% if item.is_shared %}
-                                    <span class="dashboard-nav-owner"><span class="visually-hidden">shared </span>by {{ item.owner_username }}</span>
-                                {% endif %}
-                            </a>
-                        </li>
-                    {% endfor %}
-                </ul>
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
                 </nav>
             {% endif %}
             {% if dashboard is defined and dashboard %}

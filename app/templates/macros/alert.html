@@ -1,20 +1,23 @@
 {% macro alert(title, message, category="info") %}
-{% if message %}
-<div class="alert {{ category }}" role="status" aria-live="polite" aria-atomic="true">
-    <div class="alert-info">
-        <span class="alert-icon">
-            <i class="fa-solid {{ alert_icon(category) }}" aria-hidden="true"></i>
-        </span>
-        <div class="alert-content">
-            {% if title %}
-            <h3 class="alert-title">{{ title }}</h3>
+    {% if message %}
+        <div class="alert {{ category }}"
+             role="status"
+             aria-live="polite"
+             aria-atomic="true">
+            <div class="alert-info">
+                <span class="alert-icon">
+                    <i class="fa-solid {{ alert_icon(category) }}" aria-hidden="true"></i>
+                </span>
+                <div class="alert-content">
+                    {% if title %}
+                        <h3 class="alert-title">{{ title }}</h3>
+                    {% endif %}
+                    <p class="alert-message">{{ message }}</p>
+                </div>
+            </div>
+            {% if caller %}
+                <div class="alert-actions">{{ caller() }}</div>
             {% endif %}
-            <p class="alert-message">{{ message }}</p>
         </div>
-    </div>
-    {% if caller %}
-    <div class="alert-actions">{{ caller() }}</div>
     {% endif %}
-</div>
-{% endif %}
 {% endmacro %}

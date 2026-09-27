@@ -2,8 +2,12 @@
     pattern=none, autocomplete=none, field_id=none, readonly=false, hint=none) %}
     {% set input_id = field_id if field_id else name %}
     {% set describedby = [] %}
-    {% if hint %}{% set _ = describedby.append(input_id ~ '-hint') %}{% endif %}
-    {% if errors %}{% set _ = describedby.append(input_id ~ '-errors') %}{% endif %}
+    {% if hint %}
+        {% set _ = describedby.append(input_id ~ '-hint') %}
+    {% endif %}
+    {% if errors %}
+        {% set _ = describedby.append(input_id ~ '-errors') %}
+    {% endif %}
     <div class="form-control-wrapper">
         <div class="form-control{% if errors %} is-invalid{% endif %}">
             <input id="{{ input_id }}"

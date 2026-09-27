@@ -26,28 +26,28 @@
                         <i class="fa-solid fa-plus" aria-hidden="true"></i>
                     </button>
                 {% endcall %}
-            <ul id="options">
-                <li>
-                    {% call tooltip('Add note', 'top') %}
-                        <button type="button"
-                                class="center-items"
-                                id="addNoteButton"
-                                aria-label="Add note">
-                            <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
-                        </button>
-                    {% endcall %}
-            </li>
-            <li>
-                {% call tooltip('Add dashboard', 'top') %}
-                    <button type="button"
-                            class="center-items modal-trigger"
-                            data-modal="addDashboardModal"
-                            aria-label="Add dashboard">
-                        <i class="fa-regular fa-folder" aria-hidden="true"></i>
-                    </button>
-                {% endcall %}
-            </li>
-            </ul>
+                <ul id="options">
+                    <li>
+                        {% call tooltip('Add note', 'top') %}
+                            <button type="button"
+                                    class="center-items"
+                                    id="addNoteButton"
+                                    aria-label="Add note">
+                                <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
+                            </button>
+                        {% endcall %}
+                    </li>
+                    <li>
+                        {% call tooltip('Add dashboard', 'top') %}
+                            <button type="button"
+                                    class="center-items modal-trigger"
+                                    data-modal="addDashboardModal"
+                                    aria-label="Add dashboard">
+                                <i class="fa-regular fa-folder" aria-hidden="true"></i>
+                            </button>
+                        {% endcall %}
+                    </li>
+                </ul>
             </nav>
         {% endif %}
         <main id="main-content">
@@ -63,21 +63,21 @@
                                 {{ noteWithContent(note, csrf_token, dashboard) }}
                             </div>
                             {% if note.can_edit is not defined or note.can_edit %}
-                            <div class="note-edit{% if not note_errors %} hidden-form{% endif %}">
-                                {{ noteWithForm({
-                                    "Form": noteForm(
-                                    url_for(
-                                    "notes.update",
-                                    dashboard_id=dashboard.id,
-                                    note_id=note.id
-                                    ),
-                                    csrf_token,
-                                    note,
-                                    errors=note_errors,
-                                    values=note_values
-                                    )
-                                }) }}
-                            </div>
+                                <div class="note-edit{% if not note_errors %} hidden-form{% endif %}">
+                                    {{ noteWithForm({
+                                        "Form": noteForm(
+                                        url_for(
+                                        "notes.update",
+                                        dashboard_id=dashboard.id,
+                                        note_id=note.id
+                                        ),
+                                        csrf_token,
+                                        note,
+                                        errors=note_errors,
+                                        values=note_values
+                                        )
+                                    }) }}
+                                </div>
                             {% endif %}
                         </div>
                     {% endfor %}
