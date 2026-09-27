@@ -5,6 +5,26 @@ from flask_limiter.errors import RateLimitExceeded
 
 from app.extensions import db, mail, migrate, login_manager, limiter
 
+# style-src needs 'unsafe-inline': Editor.js (core, paragraph, list) and the
+# Font Awesome kit inject <style> elements at runtime with no nonce hook.
+CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self' https://kit.fontawesome.com https://cdn.jsdelivr.net",
+        "script-src-attr 'none'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"
+        " https://ka-f.fontawesome.com https://kit.fontawesome.com",
+        "font-src 'self' https://fonts.gstatic.com"
+        " https://ka-f.fontawesome.com https://kit.fontawesome.com",
+        "connect-src 'self' https://ka-f.fontawesome.com https://kit.fontawesome.com",
+        "img-src 'self' data:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+    ]
+)
+
 
 def create_app(config_overrides=None):
     app = Flask(
@@ -18,6 +38,10 @@ def create_app(config_overrides=None):
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = os.environ.get(
+        "SESSION_COOKIE_SECURE", "true"
+    ).lower() in ("1", "true", "yes")
+    app.config["REMEMBER_COOKIE_SECURE"] = app.config["SESSION_COOKIE_SECURE"]
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=7)
 
     app.config["MAIL_SERVER"] = os.environ.get("MAIL_SERVER")
@@ -65,6 +89,13 @@ def create_app(config_overrides=None):
         flash("Too many attempts. Please wait a moment and try again.", "warning")
         return redirect(request.referrer or url_for("auth.login"))
     
+    @app.after_request
+    def set_security_headers(response):
+        response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        return response
+
     @app.errorhandler(404)
     def handle_page_not_found(error):
         return render_template('404.html'), 404

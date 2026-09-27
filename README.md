@@ -76,7 +76,9 @@ Note content is stored as a flat JSON list of **storage blocks** (`paragraph` / 
 
 - **CSRF** — State-changing forms include a CSRF token; requests without a valid token are rejected
 - **Rate limiting** — Auth routes are limited with Flask-Limiter to slow brute-force attempts
-- **Sessions** — Cookies use `HttpOnly` and `SameSite=Lax`; `SECRET_KEY` signs the session
+- **Sessions** — Cookies use `HttpOnly`, `SameSite=Lax`, and `Secure`; `SECRET_KEY` signs the session. `Secure` is on unless `SESSION_COOKIE_SECURE=false` (needed only for local development over plain http)
+- **XSS** — Jinja autoescaping is on for all templates. Note content is stored as plain text and HTML-escaped before it is handed to Editor.js, whose tools render block text via `innerHTML`. Form values echoed back after a validation error are the sanitized blocks, never the raw request body
+- **Content Security Policy** — Every response sends a CSP that allows scripts only from the app and the pinned CDNs (`script-src` has no `'unsafe-inline'`, and `script-src-attr 'none'` blocks inline event handlers), so no inline `<script>` or `onclick=` is allowed in templates. Adding a new third-party asset (CDN, font, icon kit) means adding its domain to `CONTENT_SECURITY_POLICY` in `app/__init__.py`. `style-src` does include `'unsafe-inline'` because Editor.js and the Font Awesome kit inject `<style>` elements at runtime. Responses also send `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`
 
 [Back to the top](#PinIt)
 

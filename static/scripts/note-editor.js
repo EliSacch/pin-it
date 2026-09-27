@@ -8,9 +8,17 @@ const editorsByHolderId = new Map();
         return window.EditorjsList || window.List;
     }
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
     /**
      * Convert storage blocks → Editor.js blocks.
      * Adjacent todos become one checklist list block.
+     * Storage text is plain text; Editor.js tools assign it via innerHTML, so it must be escaped.
      */
     function storageBlocksToEditorBlocks(storageBlocks) {
         const editorBlocks = [];
@@ -25,7 +33,7 @@ const editorsByHolderId = new Map();
                 data: {
                     style: 'checklist',
                     items: todoBuffer.map((todo) => ({
-                        content: todo.text || '',
+                        content: escapeHtml(todo.text),
                         meta: { checked: Boolean(todo.isChecked) },
                         items: [],
                     })),
@@ -46,7 +54,7 @@ const editorsByHolderId = new Map();
             if (block.type === 'paragraph') {
                 editorBlocks.push({
                     type: 'paragraph',
-                    data: { text: block.text || '' },
+                    data: { text: escapeHtml(block.text) },
                 });
             }
         });
@@ -68,25 +76,16 @@ const editorsByHolderId = new Map();
         }
     }
 
+    /**
+     * The hidden field only ever holds storage blocks echoed back after a validation error;
+     * never pass it to Editor.js without going through storageBlocksToEditorBlocks.
+     */
     function resolveInitialEditorData($form) {
         const $holder = $form.find('.note-editor');
-        const hiddenValue = $form.find('.note-content-json').val();
-        const parsedHidden = parseJson(hiddenValue, null);
-
-        if (parsedHidden) {
-            if (Array.isArray(parsedHidden) && parsedHidden[0] && parsedHidden[0].type && parsedHidden[0].data) {
-                return { blocks: parsedHidden };
-            }
-            if (parsedHidden.blocks) {
-                return { blocks: parsedHidden.blocks };
-            }
-            // Storage-shaped array submitted on error after client remap — uncommon
-            if (Array.isArray(parsedHidden) && parsedHidden[0] && (parsedHidden[0].type === 'paragraph' || parsedHidden[0].type === 'todo')) {
-                return { blocks: storageBlocksToEditorBlocks(parsedHidden) };
-            }
-        }
-
-        const storageBlocks = parseJson($holder.attr('data-storage-blocks'), []);
+        const hidden = parseJson($form.find('.note-content-json').val(), null);
+        const storageBlocks = Array.isArray(hidden)
+            ? hidden
+            : parseJson($holder.attr('data-storage-blocks'), []);
         return { blocks: storageBlocksToEditorBlocks(storageBlocks) };
     }
 

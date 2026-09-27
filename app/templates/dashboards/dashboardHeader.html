@@ -6,17 +6,21 @@
     <div class="dashboard-header-actions">
         {% if is_owner and dashboard.is_default != True %}
             {% if request.endpoint == 'dashboards.settings' %}
-                {{ tooltip('<a href="' ~ url_for('dashboards.get', dashboard_id=dashboard.id, slug=dashboard.slug) ~ '"
-                    class="base-button link-light"
-                    aria-label="Back to dashboard">
-                    <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                    </a>', 'Back to dashboard', 'right', 'light') }}
+                {% call tooltip('Back to dashboard', 'right', 'light') %}
+                    <a href="{{ url_for('dashboards.get', dashboard_id=dashboard.id, slug=dashboard.slug) }}"
+                       class="base-button link-light"
+                       aria-label="Back to dashboard">
+                        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                    </a>
+                {% endcall %}
             {% else %}
-                {{ tooltip('<a href="' ~ url_for('dashboards.settings', dashboard_id=dashboard.id, slug=dashboard.slug) ~ '"
-                    class="base-button link-light"
-                    aria-label="Dashboard settings">
-                    <i class="fa-solid fa-gear" aria-hidden="true"></i>
-                    </a>', 'Dashboard settings', 'right', 'light') }}
+                {% call tooltip('Dashboard settings', 'right', 'light') %}
+                    <a href="{{ url_for('dashboards.settings', dashboard_id=dashboard.id, slug=dashboard.slug) }}"
+                       class="base-button link-light"
+                       aria-label="Dashboard settings">
+                        <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                    </a>
+                {% endcall %}
             {% endif %}
         {% endif %}
     </div>

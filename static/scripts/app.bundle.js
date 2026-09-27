@@ -111,6 +111,9 @@
         target.scrollIntoView();
       }
     });
+    $(document).on("click", "#messages .close-button", function() {
+      $(this).closest(".message").remove();
+    });
     $(document).on("submit", "form", function(event) {
       const $form = $(this);
       const submitter = event.originalEvent && event.originalEvent.submitter;
@@ -719,6 +722,9 @@
   function getListTool() {
     return window.EditorjsList || window.List;
   }
+  function escapeHtml(value) {
+    return String(value == null ? "" : value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
   function storageBlocksToEditorBlocks(storageBlocks) {
     const editorBlocks = [];
     let todoBuffer = [];
@@ -731,7 +737,7 @@
         data: {
           style: "checklist",
           items: todoBuffer.map((todo) => ({
-            content: todo.text || "",
+            content: escapeHtml(todo.text),
             meta: { checked: Boolean(todo.isChecked) },
             items: []
           }))
@@ -751,7 +757,7 @@
       if (block.type === "paragraph") {
         editorBlocks.push({
           type: "paragraph",
-          data: { text: block.text || "" }
+          data: { text: escapeHtml(block.text) }
         });
       }
     });
@@ -773,20 +779,8 @@
   }
   function resolveInitialEditorData($form) {
     const $holder = $form.find(".note-editor");
-    const hiddenValue = $form.find(".note-content-json").val();
-    const parsedHidden = parseJson(hiddenValue, null);
-    if (parsedHidden) {
-      if (Array.isArray(parsedHidden) && parsedHidden[0] && parsedHidden[0].type && parsedHidden[0].data) {
-        return { blocks: parsedHidden };
-      }
-      if (parsedHidden.blocks) {
-        return { blocks: parsedHidden.blocks };
-      }
-      if (Array.isArray(parsedHidden) && parsedHidden[0] && (parsedHidden[0].type === "paragraph" || parsedHidden[0].type === "todo")) {
-        return { blocks: storageBlocksToEditorBlocks(parsedHidden) };
-      }
-    }
-    const storageBlocks = parseJson($holder.attr("data-storage-blocks"), []);
+    const hidden = parseJson($form.find(".note-content-json").val(), null);
+    const storageBlocks = Array.isArray(hidden) ? hidden : parseJson($holder.attr("data-storage-blocks"), []);
     return { blocks: storageBlocksToEditorBlocks(storageBlocks) };
   }
   function focusChecklistItem(editor, blockIndex, atEnd) {

@@ -1,6 +1,11 @@
-{% macro tooltip(trigger, text, position="top", theme="default") %}
+{#
+    Usage: {% call tooltip('Label', 'bottom') %}<button ...>...</button>{% endcall %}
+    The trigger is written as template markup inside the call block so that every
+    {{ value }} in it is autoescaped. Do not pass trigger HTML in as a string.
+#}
+{% macro tooltip(text, position="top", theme="default") %}
     <div class="tooltip-container {{ theme }}">
-        {{ trigger | safe }}
+        {{ caller() }}
         <div class="tooltip-box {{ position }} {{ theme }}" aria-hidden="true">
             <p>{{ text }}</p>
         </div>
