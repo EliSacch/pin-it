@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
 from app.helpers.dashboard_access import (
+    accepted_invite_for,
     can_manage_note,
     get_member_dashboard_or_404,
     member_dashboards,
@@ -15,6 +16,7 @@ from app.helpers.invites import (
     collect_invite_email_errors,
     create_invites,
     normalized_invite_emails,
+    revoke_invite,
     send_invite_emails,
     submitted_invite_emails,
 )
@@ -379,6 +381,41 @@ def delete(dashboard_id):
         errors.setdefault("form", []).append("There was an error submitting this request. Please try again.")
         return _create_error_response(errors, form_key="delete", redirect_url=_settings_url(dashboard))
 
+    redirect_url = url_for("main.index")
+    if _wants_json():
+        return jsonify({"ok": True, "redirect_url": redirect_url})
+    return redirect(redirect_url)
+
+
+@dashboards_bp.route("/<int:dashboard_id>/leave", methods=["POST"])
+@login_required
+def leave(dashboard_id):
+    dashboard = get_member_dashboard_or_404(dashboard_id)
+    if dashboard.owner_id == current_user.id:
+        abort(404)
+    invite = accepted_invite_for(dashboard, current_user)
+    if invite is None:
+        abort(404)
+    if not _has_valid_dashboards_csrf_token():
+        return _create_error_response(
+            {"form": ["Invalid form submission."]},
+            form_key="leave",
+            redirect_url=_dashboard_url(dashboard),
+        )
+
+    revoke_invite(invite)
+    try:
+        db.session.commit()
+        session.pop("dashboards_csrf_token", None)
+    except SQLAlchemyError:
+        db.session.rollback()
+        return _create_error_response(
+            {"form": ["There was an error submitting this request. Please try again."]},
+            form_key="leave",
+            redirect_url=_dashboard_url(dashboard),
+        )
+
+    flash(f"You left {dashboard.name}.", "success")
     redirect_url = url_for("main.index")
     if _wants_json():
         return jsonify({"ok": True, "redirect_url": redirect_url})

@@ -5,6 +5,7 @@
 {% from "forms/dashboardForm.html" import dashboardForm %}
 {% from "forms/noteForm.html" import noteForm %}
 {% from "forms/deleteNoteForm.html" import deleteNoteForm %}
+{% from "forms/leaveDashboardForm.html" import leaveDashboardForm %}
 {% from "macros/tooltip.html" import tooltip %}
 {% from "macros/modal.html" import modal %}
 {% extends "base.html" %}
@@ -116,5 +117,13 @@
         {% set deleteNoteFormHtml = deleteNoteForm(csrf_token) %}
         {{ modal('addDashboardModal', 'Add dashboard', addDashboardForm, confirm_action='submit-form') }}
         {{ modal('deleteNoteModal', 'Delete note', deleteNoteFormHtml, confirm_action='submit-form') }}
+        {% if dashboard and not is_owner %}
+            {% set leaveDashboardFormHtml = leaveDashboardForm(
+                dashboards_csrf_token,
+                errors=dashboard_errors.get('leave', {}),
+                action=url_for('dashboards.leave', dashboard_id=dashboard.id)
+            ) %}
+            {{ modal('leaveDashboardModal', 'Leave dashboard', leaveDashboardFormHtml, confirm_action='submit-form') }}
+        {% endif %}
     {% endif %}
 {% endblock %}
