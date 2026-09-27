@@ -6,6 +6,11 @@
     gap: var(--spacing-m);
 }
 
+.profile-page > .profile-email-verification { 
+    align-self: stretch;
+    max-width: 600px;
+}
+
 .profile-page h2 {
     margin-bottom: var(--spacing-m);
 }
