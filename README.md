@@ -25,6 +25,7 @@ A web app for your notes
 - [Deployment](#deployment)
   - [Live Website](#live-website)
   - [Local Deployment](#local-deployment)
+  - [Production](#production)
   - [Database migrations](#database-migrations)
   - [Environment variables](#environment-variables)
   - [Testing emails with Mailtrap](#testing-emails-with-mailtrap)
@@ -191,6 +192,25 @@ The live version of this program is available here.
   - Login with new user `/opt/homebrew/opt/postgresql@18/bin/psql -U pinit_user -d pinit -W`
 
 
+### Production
+
+The live app runs on [Render](https://render.com/) with [Neon](https://neon.tech/) as the PostgreSQL database. Leave Render's root directory empty. Render installs `requirements.txt` during the build and injects environment variables into the process. Start command:
+
+```bash
+gunicorn --bind 0.0.0.0:$PORT "app:create_app()"
+```
+
+`python run.py` is for local development only. `load_dotenv()` lives in `run.py` and is not part of this process. Set `DATABASE_URL`, `SECRET_KEY`, and any mail variables in the Render service settings. `create_app()` reads them from the environment.
+
+For the running app, set `DATABASE_URL` to Neon’s pooled connection string (the host contains `-pooler`) and use the `postgresql+psycopg2://` scheme. Apply schema changes with the direct Neon URL, not the pooler:
+
+```bash
+flask --app run db upgrade
+```
+
+The pooler is PgBouncer in transaction mode, and Flask-Migrate’s advisory lock needs a direct connection.
+
+
 ### Database migrations
 
 Database schema changes are tracked with Flask-Migrate and Alembic.
@@ -312,6 +332,7 @@ npm run watch
 ### Backend
 
 - [Flask](https://flask.palletsprojects.com/) — web framework (application factory pattern)
+- [Gunicorn](https://gunicorn.org/) — production WSGI server
 - [Flask-SQLAlchemy](https://flask-sqlalchemy.palletsprojects.com/) — ORM integration
 - [SQLAlchemy](https://www.sqlalchemy.org/) — database models and queries
 - [Flask-Migrate](https://flask-migrate.readthedocs.io/) / [Alembic](https://alembic.sqlalchemy.org/) — database migrations
@@ -345,7 +366,8 @@ npm run watch
 
 ### Hosting
 
-- [TBD]() — planned/live deployment target
+- [Render](https://render.com/) — production web service
+- [Neon](https://neon.tech/) — production PostgreSQL
 
 [Back to the top](#pinit)
 
