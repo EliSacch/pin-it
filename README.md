@@ -1,9 +1,9 @@
 # PinIt
 A web app for your notes
 
-[Link to live site]()
+[Link to live site](https://pinit.elisa-portfolio.app/)
 
-![Hero image]()
+![Hero image](assets/screenshots/collab-desktop.png)
 
 
 ## Table of content
@@ -152,7 +152,7 @@ During development, Cursor loads project accessibility guidance from `.cursor/ru
 
 The live version of this program is available here.
 
-[Click here to open]()
+[Click here to open](https://pinit.elisa-portfolio.app/)
 
 
 ### Local Deployment
@@ -194,7 +194,7 @@ The live version of this program is available here.
 
 ### Production
 
-The live app runs on [Render](https://render.com/) with [Neon](https://neon.tech/) as the PostgreSQL database. Leave Render's root directory empty. Render installs `requirements.txt` during the build and injects environment variables into the process. Start command:
+The live app runs on [Render](https://render.com/), with [Neon](https://neon.tech/) as the PostgreSQL database and [Resend](https://resend.com/) for outbound email. Leave Render's root directory empty. Render installs `requirements.txt` during the build and injects environment variables into the process. Start command:
 
 ```bash
 gunicorn --bind 0.0.0.0:$PORT "app:create_app()"
@@ -209,6 +209,20 @@ flask --app run db upgrade
 ```
 
 The pooler is PgBouncer in transaction mode, and Flask-Migrate’s advisory lock needs a direct connection.
+
+Production email is sent through Resend’s SMTP server. Render’s free tier blocks outbound ports 25, 465, and 587, so use Resend’s STARTTLS port 2587:
+
+```bash
+MAIL_BACKEND=smtp
+MAIL_SERVER=smtp.resend.com
+MAIL_PORT=2587
+MAIL_USE_TLS=true
+MAIL_USERNAME=resend
+MAIL_PASSWORD=your_resend_api_key
+MAIL_DEFAULT_SENDER=PinIt <noreply@your-verified-domain>
+```
+
+`MAIL_USERNAME` is the literal word `resend`. `MAIL_PASSWORD` is a Resend API key. `MAIL_DEFAULT_SENDER` must be an address on a domain verified in Resend.
 
 
 ### Database migrations
@@ -368,6 +382,7 @@ npm run watch
 
 - [Render](https://render.com/) — production web service
 - [Neon](https://neon.tech/) — production PostgreSQL
+- [Resend](https://resend.com/) — production SMTP for verification and invite email
 
 [Back to the top](#pinit)
 
