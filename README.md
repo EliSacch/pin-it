@@ -43,34 +43,72 @@ A web app for your notes
 
 ## Architecture
 
-The app uses Flask’s **application factory** (`create_app` in `app/__init__.py`). Extensions (SQLAlchemy, Migrate, Login, Limiter) are initialized there, then blueprints are registered:
+The app uses Flask’s **application factory** (`create_app` in `app/__init__.py`). Extensions (SQLAlchemy, Migrate, Login, Limiter, Mailman) are created in `app/extensions.py` and initialized there, then blueprints are registered:
 
 | Blueprint | Role |
 |-----------|------|
-| `main` | Health check and entry routing |
-| `auth` | Register, login, logout |
-| `profile` | View, Edit profile |
-| `dashboards` | Create and open note boards |
-| `notes` | Create, update, delete notes; toggle checklist items |
+| `main` | Home / entry routing for signed-in users |
+| `auth` | Register, login, logout, email verification, change password, delete account |
+| `profile` | View and update username / email |
+| `dashboards` | Create, rename, delete, and leave boards; settings |
+| `notes` | Create, update, and delete notes; toggle checklist items |
+| `invites` | Owner sends, resends, and revokes dashboard invitations |
+| `invitations` | Invitee opens a signed invite link and accepts or declines |
 
-Templates live under `app/templates/`. Static assets (CSS and JS) live under `static/`. Database models are in `app/models/`; schema changes are managed with Flask-Migrate / Alembic under `migrations/`.
+### Layout
 
-Note content is stored as a flat JSON list of **storage blocks** (`paragraph` / `todo` in `Notes.content_json`). The client maps those to and from Editor.js save JSON (`paragraph` + checklist `list` blocks) in `static/scripts/note-editor.js` and `app/routes/notes.py`.
+| Path | Role |
+|------|------|
+| `app/models/` | SQLAlchemy models (`User`, `Dashboard`, `Note`, `Invite`) |
+| `app/routes/` | Blueprint handlers |
+| `app/helpers/` | Shared domain logic (access checks, invites, email, account deletion, validation) |
+| `app/templates/` | Jinja templates |
+| `static/` | CSS and JS (esbuild bundle under `static/scripts/`) |
+| `migrations/` | Flask-Migrate / Alembic schema history |
+| `tests/` | Pytest suite |
 
-[Back to the top](#PinIt)
+### Data model
+
+- **User** — account credentials, email verification flag, owned dashboards and authored notes.
+- **Dashboard** — a named board owned by one user. Each account gets a default `Home` board on register. Collaboration is not a separate membership table: an accepted, non-revoked `Invite` grants access.
+- **Invite** — email + optional `user_id`, status (`pending` / `accepted` / `rejected`), and soft revoke via `deleted_at`. Unique per `(dashboard_id, email)`. Tokenized invite links are handled under `invitations`.
+- **Note** — belongs to a dashboard and (usually) an author (`owner_id`). Content is a flat JSON list of **storage blocks** (`paragraph` / `todo` in `Notes.content_json`). The client maps those to and from Editor.js save JSON (`paragraph` + checklist `list` blocks) in `static/scripts/note-editor.js` and `app/routes/notes.py`.
+
+Access helpers in `app/helpers/dashboard_access.py` decide who can open a board and who can edit or delete a note: the note author or the dashboard owner.
+
+### Sharing and collaborations
+
+Dashboard owners invite collaborators by email. Known users can accept or decline from an invite page; pending invites for unregistered emails wait until that address signs up. Leaving a board or revoking a collaborator soft-deletes the invite (`deleted_at`) without removing notes the collaborator already created.
+
+### Account deletion
+
+Permanent deletion is password-confirmed under `auth` and orchestrated in `app/helpers/account_deletion.py` in one transaction:
+
+1. Notes the user authored on **other people's** dashboards are kept: `owner_id` is cleared and `owner_deleted_at` is set (a check constraint requires exactly one of those fields).
+2. Dashboards the user owns are deleted; database cascades remove those boards' notes and invites (including notes written by collaborators).
+3. The user row is deleted; their membership invites cascade away.
+
+Surviving notes with a deleted author remain manageable by the dashboard owner.
+
+[Back to the top](#pinit)
 
 ## Features
 
-- **Authentication** — Register and log in with session-based auth (Flask-Login)
-- **Email verification** — Verify email address (Flask-Mailman)
-- **Dashboards** — Organize notes into named dashboards and switch between them
-- **Notes** — Create, edit, and delete notes; title plus rich body content
+- **Authentication** — Register, log in, and log out with session-based auth (Flask-Login)
+- **Email verification** — Verify email address and resend the link from the profile (Flask-Mailman)
+- **Change password** — Update password after confirming the current one
+- **Delete account** — Permanently delete the account; owned dashboards and their notes are removed, while notes authored on others’ boards stay and are marked as from a deleted user
+- **Profile** — View and update username and email inline
+- **Dashboards** — Organize notes into named boards (including a default `Home`), switch between them, rename, and delete non-default boards
+- **Dashboard sharing** — Invite collaborators by email, accept or decline invite links, and see shared boards in the nav
+- **Collaborator management** — Revoke access from settings, or leave a shared board; notes the collaborator already created stay on the board
+- **Notes** — Create, edit, and delete notes; title plus rich body content. Collaborators can add notes; the dashboard owner can manage any note on their board
 - **Editor.js editor** — Block editing for paragraphs and checklists (`--` shortcut to start a checklist item)
 - **Checklist todos** — Toggle items from the note view without a full page reload
-- **Modals** — Confirm logout, add a dashboard, and delete a note in accessible dialogs
+- **Modals** — Confirm logout, add or delete a dashboard, leave a board, revoke a collaborator, and delete a note in accessible dialogs
 - **Flash messages** — Success and error feedback after actions
 
-[Back to the top](#PinIt)
+[Back to the top](#pinit)
 
 ## Security
 
@@ -80,7 +118,7 @@ Note content is stored as a flat JSON list of **storage blocks** (`paragraph` / 
 - **XSS** — Jinja autoescaping is on for all templates. Note content is stored as plain text and HTML-escaped before it is handed to Editor.js, whose tools render block text via `innerHTML`. Form values echoed back after a validation error are the sanitized blocks, never the raw request body
 - **Content Security Policy** — Every response sends a CSP that allows scripts only from the app and the pinned CDNs (`script-src` has no `'unsafe-inline'`, and `script-src-attr 'none'` blocks inline event handlers), so no inline `<script>` or `onclick=` is allowed in templates. Adding a new third-party asset (CDN, font, icon kit) means adding its domain to `CONTENT_SECURITY_POLICY` in `app/__init__.py`. `style-src` does include `'unsafe-inline'` because Editor.js and the Font Awesome kit inject `<style>` elements at runtime. Responses also send `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`
 
-[Back to the top](#PinIt)
+[Back to the top](#pinit)
 
 ## Accessibility
 
@@ -99,13 +137,13 @@ Editor.js checklists are enhanced for keyboard use (Tab between items; Space/Ent
 
 During development, Cursor loads project accessibility guidance from `.cursor/rules/accessibility.mdc`. For a full review, use the project skill in `.cursor/skills/accessibility-audit/` (e.g. ask the agent to run an accessibility audit).
 
-[Back to the top](#PinIt)
+[Back to the top](#pinit)
 
 ## Testing 
 
 ### Validator Testing
 
-[Back to the top](#PinIt)
+[Back to the top](#pinit)
 
 ## Deployment
 
@@ -260,7 +298,7 @@ npm run watch
 
 `node_modules/` is gitignored. The generated bundle is committed so `python run.py` works without Node. Commit an updated `app.bundle.js` with any JavaScript source change.
 
-[Back to the top](#PinIt)
+[Back to the top](#pinit)
 
 ## Technologies used
 
@@ -279,6 +317,7 @@ npm run watch
 - [Flask-Migrate](https://flask-migrate.readthedocs.io/) / [Alembic](https://alembic.sqlalchemy.org/) — database migrations
 - [Flask-Login](https://flask-login.readthedocs.io/) — session-based authentication
 - [Flask-Limiter](https://flask-limiter.readthedocs.io/) — rate limiting on auth routes
+- [Flask-Mailman](https://flask-mailman.readthedocs.io/) — outbound email (verification and invites)
 - [Werkzeug](https://werkzeug.palletsprojects.com/) — password hashing
 - [psycopg2](https://www.psycopg.org/) — PostgreSQL driver
 - [PostgreSQL](https://www.postgresql.org/) — primary database
@@ -295,8 +334,10 @@ npm run watch
 ### Tooling
 
 - [Cursor](https://cursor.com/) — AI-assisted development (rules and skills for accessibility and workflows)
+- [pytest](https://docs.pytest.org/) / [pytest-flask](https://pytest-flask.readthedocs.io/) — test suite (listed in `requirements-dev.txt`)
 - [djLint](https://djlint.com/) — Jinja/HTML template linting and formatting (listed in `requirements-dev.txt`)
 - [python-dotenv](https://github.com/theskumar/python-dotenv) — loads local `.env` in `run.py` (listed in `requirements-dev.txt`)
+- [Mailtrap](https://mailtrap.io/) — local email sandbox for verification and invite testing
 - Virtualenv — local Python environment
 - `requirements.txt` — runtime packages for running and deploying the app
 - `requirements-dev.txt` — runtime packages plus local development tools
@@ -305,5 +346,7 @@ npm run watch
 ### Hosting
 
 - [TBD]() — planned/live deployment target
+
+[Back to the top](#pinit)
 
 ## Acknowledgements
