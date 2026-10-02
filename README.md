@@ -181,7 +181,6 @@ The live version of this program is available here.
   #### Create a Postgres Local db for the first time
   - Install postgresql `brew install postgresql@18`
   - Start `brew services start postgresql@18`
-  - List users `\du+`
   - Login with admin role `/opt/homebrew/opt/postgresql@18/bin/psql -d postgres`
   - Check current user `SELECT current_user;`
   - Create new user `CREATE ROLE pinitt_user LOGIN PASSWORD 'choose-a-new-password';`
